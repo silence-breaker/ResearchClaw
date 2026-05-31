@@ -1,0 +1,49 @@
+{
+  "id": "researchclaw",
+  "name": "ResearchClaw",
+  "description": "Start or resume the local ResearchClaw workflow from OpenClaw chat.",
+  "version": "0.1.0",
+  "enabledByDefault": true,
+  "activation": {
+    "onStartup": true
+  },
+  "commandAliases": [
+    {
+      "name": "researchclaw",
+      "kind": "runtime-slash"
+    }
+  ],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "serverUrl": {
+        "type": "string",
+        "default": "http://127.0.0.1:8787"
+      },
+      "publicUrl": {
+        "type": "string"
+      },
+      "requestTimeoutMs": {
+        "type": "integer",
+        "minimum": 1000,
+        "maximum": 30000,
+        "default": 5000
+      }
+    }
+  },
+  "uiHints": {
+    "serverUrl": {
+      "label": "ResearchClaw Server URL",
+      "help": "URL OpenClaw uses to call the local ResearchClaw HTTP service."
+    },
+    "publicUrl": {
+      "label": "ResearchClaw Public URL",
+      "help": "Optional browser-facing URL shown in chat replies, useful for SSH port forwarding."
+    },
+    "requestTimeoutMs": {
+      "label": "Request Timeout",
+      "help": "Timeout for calls from OpenClaw to the ResearchClaw server."
+    }
+  }
+}

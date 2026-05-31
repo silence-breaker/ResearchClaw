@@ -1,0 +1,15 @@
+{
+  "name": "openclaw-plugin-researchclaw",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "OpenClaw slash command integration for ResearchClaw.",
+  "peerDependencies": {
+    "openclaw": ">=2026.5.18"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.js"
+    ]
+  }
+}

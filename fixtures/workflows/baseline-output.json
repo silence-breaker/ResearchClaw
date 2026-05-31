@@ -1,0 +1,41 @@
+{
+  "selected": {
+    "paper_id": "paper_contrastive_vl_retrieval",
+    "name": "Contrastive VL Retrieval Baseline",
+    "code_url": "https://example.org/code/contrastive-vl-retrieval",
+    "reason": "It has public code, recall@10 reporting, and a clear same-split reproduction path."
+  },
+  "candidates": [
+    {
+      "paper_id": "paper_contrastive_vl_retrieval",
+      "name": "Contrastive VL Retrieval Baseline",
+      "pros": [
+        "Open code",
+        "Standard recall@K metrics",
+        "Compatible with lightweight reranking"
+      ],
+      "cons": [
+        "May require dataset license confirmation"
+      ],
+      "reproducibility_risk": "low"
+    },
+    {
+      "paper_id": "paper_hard_negative_rerank",
+      "name": "Hard Negative Rerank Baseline",
+      "pros": [
+        "Mechanism close to proposed direction",
+        "Open code"
+      ],
+      "cons": [
+        "More moving parts than a retrieval-only baseline"
+      ],
+      "reproducibility_risk": "medium"
+    }
+  ],
+  "rejected": [
+    {
+      "paper_id": "paper_domain_retrieval_eval",
+      "reason": "Useful evaluation reference but less suitable as the primary baseline."
+    }
+  ]
+}

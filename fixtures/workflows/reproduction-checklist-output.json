@@ -1,0 +1,44 @@
+{
+  "baseline_name": "Contrastive VL Retrieval Baseline",
+  "repository": "https://example.org/code/contrastive-vl-retrieval",
+  "environment": [
+    "Python 3.11",
+    "CUDA optional for GPU smoke run",
+    "Pinned dependency file from upstream repository"
+  ],
+  "data_requirements": [
+    "Download public retrieval dataset",
+    "Verify train/validation/test split names",
+    "Record dataset license and checksum"
+  ],
+  "commands": [
+    "python -m venv .venv",
+    "pip install -r requirements.txt",
+    "python scripts/evaluate.py --split test --metric recall@10"
+  ],
+  "expected_metrics": [
+    "recall@10 within 1 absolute point of the reported baseline",
+    "latency measured on the same hardware profile"
+  ],
+  "progress_signals": [
+    "Dataset checksum matches",
+    "Model checkpoint loads",
+    "Evaluation emits recall@10"
+  ],
+  "failure_alerts": [
+    "Missing checkpoint or changed dataset split",
+    "Metric differs by more than 2 absolute points",
+    "Evaluation script silently drops examples"
+  ],
+  "fingerprint_checks": [
+    "dataset checksum",
+    "checkpoint hash",
+    "git commit hash",
+    "dependency lock hash"
+  ],
+  "human_preparation_needed": [
+    "Confirm dataset license",
+    "Confirm acceptable GPU budget",
+    "Record exact hardware for latency comparison"
+  ]
+}

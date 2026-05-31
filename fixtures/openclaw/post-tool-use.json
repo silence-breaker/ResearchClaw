@@ -1,0 +1,23 @@
+{
+  "event": "post-tool-use",
+  "instruction": "Tool event: Bash / tool.finished",
+  "timestamp": "2026-05-31T00:00:02.000Z",
+  "sessionId": "sess_demo_001",
+  "projectPath": "/home/wj/openclaw",
+  "projectName": "demo_001",
+  "signal": {
+    "kind": "tool",
+    "name": "Bash",
+    "phase": "finished",
+    "routeKey": "tool.finished",
+    "priority": "low",
+    "toolName": "Bash",
+    "summary": "Command finished"
+  },
+  "context": {
+    "sessionId": "sess_demo_001",
+    "projectPath": "/home/wj/openclaw",
+    "toolName": "Bash",
+    "contextSummary": "Local smoke command completed."
+  }
+}

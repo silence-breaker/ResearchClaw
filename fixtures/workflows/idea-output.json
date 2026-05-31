@@ -1,0 +1,65 @@
+[
+  {
+    "id": "idea_structured_negatives",
+    "title": "Task-aware structured negative reranking",
+    "description": "Build negative examples from domain confusions and use them to rerank the top retrieval candidates.",
+    "expected_gain": "Improves recall@10 by correcting high-similarity false positives.",
+    "mechanism": "The reranker sees contrastive pairs that match the target domain failure modes.",
+    "baseline_compatibility": "Uses the selected baseline's top-k candidates without retraining the base encoder.",
+    "required_changes": [
+      "Add negative example builder",
+      "Add lightweight reranker scoring module",
+      "Log latency overhead"
+    ],
+    "risks": [
+      "Negative construction may leak validation assumptions",
+      "Latency may exceed the contract threshold"
+    ],
+    "evidence_refs": [
+      "paper_hard_negative_rerank",
+      "contract_demo_001"
+    ]
+  },
+  {
+    "id": "idea_query_adapter",
+    "title": "Small query-side adapter for domain vocabulary",
+    "description": "Add a small adapter to normalize domain-specific query terms before retrieval.",
+    "expected_gain": "Improves recall on domain-specific phrasing with minimal inference cost.",
+    "mechanism": "The adapter maps sparse domain terms to retrieval-friendly representations.",
+    "baseline_compatibility": "Runs before the selected baseline and keeps candidate generation unchanged.",
+    "required_changes": [
+      "Add query adapter",
+      "Create validation terms list",
+      "Compare same-split recall@10"
+    ],
+    "risks": [
+      "Could overfit to validation terms",
+      "May not help visual ambiguity"
+    ],
+    "evidence_refs": [
+      "paper_domain_retrieval_eval",
+      "contract_demo_001"
+    ]
+  },
+  {
+    "id": "idea_late_fusion_score",
+    "title": "Late-fusion rerank score with uncertainty penalty",
+    "description": "Combine baseline similarity with a calibrated uncertainty penalty for ambiguous matches.",
+    "expected_gain": "Reduces unstable top-k matches and improves recall consistency.",
+    "mechanism": "Penalizes candidates where text-image agreement is high variance across prompts.",
+    "baseline_compatibility": "Consumes baseline candidate scores and adds a deterministic post-processing step.",
+    "required_changes": [
+      "Add uncertainty probe prompts",
+      "Add late-fusion score",
+      "Evaluate latency and recall"
+    ],
+    "risks": [
+      "Additional probes may increase inference overhead",
+      "Calibration may be dataset-specific"
+    ],
+    "evidence_refs": [
+      "paper_contrastive_vl_retrieval",
+      "contract_demo_001"
+    ]
+  }
+]

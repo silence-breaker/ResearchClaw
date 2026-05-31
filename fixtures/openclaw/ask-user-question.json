@@ -1,0 +1,21 @@
+{
+  "event": "ask-user-question",
+  "instruction": "Human input requested: Approve the research contract?",
+  "timestamp": "2026-05-31T00:00:04.000Z",
+  "sessionId": "sess_demo_001",
+  "projectPath": "/home/wj/openclaw",
+  "projectName": "demo_001",
+  "signal": {
+    "kind": "question",
+    "name": "human-approval",
+    "phase": "requested",
+    "routeKey": "question.requested",
+    "priority": "high",
+    "summary": "Human approval requested"
+  },
+  "context": {
+    "sessionId": "sess_demo_001",
+    "projectPath": "/home/wj/openclaw",
+    "question": "Approve the research contract?"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "event": "keyword-detector",
+  "instruction": "Research request detected: start researchclaw Explore lightweight reranking for domain-specific vision-language retrieval.",
+  "timestamp": "2026-05-31T00:00:01.000Z",
+  "sessionId": "sess_demo_001",
+  "projectPath": "/home/wj/openclaw",
+  "projectName": "demo_001",
+  "signal": {
+    "kind": "keyword",
+    "name": "research-request",
+    "phase": "detected",
+    "routeKey": "keyword.detected",
+    "priority": "high",
+    "summary": "Research direction detected"
+  },
+  "context": {
+    "sessionId": "sess_demo_001",
+    "projectPath": "/home/wj/openclaw",
+    "prompt": "start researchclaw Explore lightweight reranking for domain-specific vision-language retrieval."
+  }
+}

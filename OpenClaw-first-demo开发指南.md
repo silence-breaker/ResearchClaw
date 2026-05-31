@@ -7,8 +7,8 @@
 - `科研助手架构批判分析.md`
 - `科研方法论.md`
 - `ResearchClaw三人分工与协作规范.md`
-- `oh-my-claude-code/dist/openclaw/*` 中已有 OpenClaw gateway 实现
-
+- OpenClaw CLI / plugin SDK 中已有 gateway 和 runtime command 实现
+- `API.md` 项目中的API接口先暂时接这个API，做冒烟测试（不管是claude， gpt还是gemini的API）
 ## 0. 如何使用本文档
 
 如果你是第一次接触这个业务，建议按下面顺序阅读：
@@ -25,7 +25,7 @@
 
 - `researchclaw/` demo 代码骨架。
 - `/openclaw/hooks` HTTP endpoint。
-- `configs/omc_config.openclaw.example.json`。
+- `researchclaw/openclaw-plugin/` runtime slash command 插件。
 - `fixtures/openclaw/*.json`。
 - `research contract` schema。
 - phase state machine。
@@ -42,7 +42,7 @@
 OpenClaw 可以触发 ResearchClaw；
 ResearchClaw 可以用 contract、state、evidence 管住科研流程；
 人在关键节点可以 approve / revise；
-OMC 不进入 demo 核心链路。
+OpenClaw 不接管科研状态。
 ```
 
 不要把第一版做成完整自动科研系统。第一版只跑通一个可解释、可验收、可回放的小闭环。
@@ -86,17 +86,11 @@ Research Workflow Engine 的 state
 
 系统必须阻止“先看到结果，再倒推故事”。所以第一版的核心不是 agent 数量，而是 `contract`、`state`、`evidence` 三件事。
 
-### 2.3 第一版暂时不接 OMC
+### 2.3 第一版入口方式
 
-OMC 是多 agent / team runtime，可以后续作为 adapter 接入。但 demo 阶段不要把它放进核心链路。
+第一版入口使用 OpenClaw 原生插件和 `/researchclaw` runtime slash command。
 
-原因：
-
-- 会引入第三套状态：OMC team task / worker / summary。
-- 会增加 tmux、CLI、worker 生命周期、部署和 debug 成本。
-- demo 当前只需要证明科研状态机闭环，不需要多 worker 并行。
-
-注意：OpenClaw 现有实现里启用开关叫 `OMC_OPENCLAW=1`，这是历史变量名，不代表本 demo 要接入 OMC。
+ResearchClaw 自己提供 HTTP server、workflow engine 和可视化 panel。OpenClaw 只负责接收用户命令并调用 ResearchClaw，不引入额外 team runtime，也不要求修改 OpenClaw 源码。
 
 ## 3. Demo 范围
 
@@ -128,7 +122,7 @@ OMC 是多 agent / team runtime，可以后续作为 adapter 接入。但 demo �
 
 ### 3.2 第一版明确不做
 
-- 不接 OMC team runtime。
+- 不接额外 team runtime。
 - 不做多 worker 并行。
 - 不自动实现代码。
 - 不跑长时间训练实验。
@@ -175,8 +169,9 @@ researchclaw/
     store.ts                     # append/read artifacts and raw logs
     types.ts
 
-configs/
-  omc_config.openclaw.example.json
+  openclaw-plugin/
+    index.ts                     # registers /researchclaw runtime slash command
+    openclaw.plugin.json
 
 fixtures/
   openclaw/
@@ -204,7 +199,7 @@ docs/
 
 | 名词 | 含义 |
 | --- | --- |
-| OpenClaw | 入口层，接收 Claude hooks / tool events，并发送 gateway payload |
+| OpenClaw | 入口层，接收聊天命令 / hook / tool events，并发送 gateway payload |
 | Hook Event | OpenClaw 捕获的事件，如 `session-start`、`post-tool-use`、`stop` |
 | Gateway Payload | OpenClaw 发给 ResearchClaw 的 JSON 请求 |
 | Research Gateway | ResearchClaw 的入口，负责 payload 校验和信号转换 |
@@ -219,11 +214,7 @@ docs/
 
 ## 6. OpenClaw 接口事实
 
-OpenClaw 现有类型位于：
-
-```text
-oh-my-claude-code/dist/openclaw/types.d.ts
-```
+OpenClaw runtime command 和 plugin SDK 类型来自已安装的 OpenClaw CLI 包。
 
 ### 6.1 可触发的 Hook Event
 
@@ -281,62 +272,31 @@ interface OpenClawPayload {
 
 具体值由 OpenClaw 根据 event / tool input / tool output 归一化生成。
 
-### 6.3 OpenClaw 配置示例
+### 6.3 OpenClaw 插件接入
 
-创建 `configs/omc_config.openclaw.example.json`：
+第一版通过 OpenClaw 插件注册 `/researchclaw` runtime slash command。
 
-```json
-{
-  "enabled": true,
-  "gateways": {
-    "researchclaw-local": {
-      "type": "http",
-      "url": "http://127.0.0.1:8787/openclaw/hooks",
-      "method": "POST",
-      "timeout": 10000,
-      "headers": {
-        "Content-Type": "application/json"
-      }
-    }
-  },
-  "hooks": {
-    "session-start": {
-      "gateway": "researchclaw-local",
-      "instruction": "ResearchClaw session started for {{projectName}}",
-      "enabled": true
-    },
-    "keyword-detector": {
-      "gateway": "researchclaw-local",
-      "instruction": "Research request detected: {{prompt}}",
-      "enabled": true
-    },
-    "ask-user-question": {
-      "gateway": "researchclaw-local",
-      "instruction": "Human input requested: {{question}}",
-      "enabled": true
-    },
-    "post-tool-use": {
-      "gateway": "researchclaw-local",
-      "instruction": "Tool event: {{toolName}} / {{signalRouteKey}}",
-      "enabled": true
-    },
-    "stop": {
-      "gateway": "researchclaw-local",
-      "instruction": "Session stopped for {{projectName}}",
-      "enabled": true
-    }
-  }
-}
+```bash
+openclaw plugins install --link /home/wj/openclaw/researchclaw/openclaw-plugin
+openclaw plugins enable researchclaw
+openclaw gateway restart
 ```
 
-运行环境要求：
+启动 ResearchClaw 服务：
+
+```bash
+npm run dev
+```
+
+在 OpenClaw 控制台聊天面板中使用：
 
 ```text
-OMC_OPENCLAW=1
-OMC_OPENCLAW_CONFIG=<path-to-omc_config.openclaw.json>
+/researchclaw
+/researchclaw <research direction>
+/researchclaw status
 ```
 
-HTTP gateway 的 URL 必须是 HTTPS，或者是 localhost / 127.0.0.1。demo 本地服务可以使用 `http://127.0.0.1`。
+插件默认调用 `http://127.0.0.1:8787`。远程 SSH 查看时，可以用 `RESEARCHCLAW_PUBLIC_URL` 或 OpenClaw plugin config 设置浏览器可访问的 panel URL。
 
 ## 7. Research Gateway 设计
 
@@ -1179,7 +1139,7 @@ OpenClaw -> /openclaw/hooks -> ResearchSignal -> state changed
 - `/openclaw/hooks` endpoint。
 - OpenClawPayload schema。
 - ResearchSignal schema。
-- `configs/omc_config.openclaw.example.json`。
+- OpenClaw `/researchclaw` runtime slash command 插件。
 - `fixtures/openclaw/*.json`。
 
 验收：
@@ -1255,7 +1215,7 @@ OpenClaw -> /openclaw/hooks -> ResearchSignal -> state changed
 一个 demo 版本只有满足下面条件才算完成：
 
 - 能启动 ResearchClaw HTTP server。
-- 能通过 OpenClaw config 把事件打到 `/openclaw/hooks`。
+- 能通过 OpenClaw 插件或 hook payload 触发 ResearchClaw。
 - 能通过 fixture 离线跑完整闭环。
 - 有机器可校验的 research contract。
 - 有明确 phase state。
@@ -1264,7 +1224,7 @@ OpenClaw -> /openclaw/hooks -> ResearchSignal -> state changed
 - 有 evidence store。
 - 有 human approve / revise 入口。
 - 有测试覆盖 gateway、contract、engine transition、workflow fixture。
-- 没有把 OMC 放入核心链路。
+- 没有引入额外 team runtime 作为核心依赖。
 - 没有默认改 OpenClaw 源码。
 
 ## 19. 常见错误
@@ -1296,9 +1256,9 @@ memory 要分层：
 
 第一版至少拆 raw payload、artifact、summary。
 
-### 错误 6：一开始接 OMC
+### 错误 6：一开始引入额外 team runtime
 
-demo 不需要 OMC。等需要多 worker、隔离 worktree、后台 task runtime 时，再做 `omcAdapter`。
+demo 当前只需要证明 ResearchClaw 状态机闭环。等确实需要多 worker、隔离 worktree、后台 task runtime 时，再单独设计可选执行层。
 
 ## 20. 开发者 PR 检查清单
 
@@ -1369,7 +1329,6 @@ demo 完成后，再考虑：
 - 接真实 Claude / Gemini / Codex adapter。
 - 加 `deep_literature_research`。
 - 加 implementation / experiment / result review。
-- 接 OMC 作为可选 `omcAdapter`，用于多 worker 并行。
 - 引入数据库或对象存储。
 - 做一个简单 dashboard 展示 phase、contract、artifact、gate。
 

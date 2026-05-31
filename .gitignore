@@ -1,0 +1,5 @@
+.researchclaw/
+node_modules/
+.env
+.env.*
+API.md

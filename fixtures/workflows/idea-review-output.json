@@ -1,0 +1,53 @@
+{
+  "reviews": [
+    {
+      "idea_id": "idea_structured_negatives",
+      "scores": {
+        "novelty": 4,
+        "feasibility": 4,
+        "reproducibility": 4,
+        "baseline_compatibility": 5,
+        "experiment_design": 4,
+        "evidence_consistency": 5
+      },
+      "decision": "go",
+      "rationale": "Best fit for the contract because it targets recall@10 while preserving the selected baseline pipeline."
+    },
+    {
+      "idea_id": "idea_query_adapter",
+      "scores": {
+        "novelty": 3,
+        "feasibility": 4,
+        "reproducibility": 3,
+        "baseline_compatibility": 4,
+        "experiment_design": 3,
+        "evidence_consistency": 4
+      },
+      "decision": "revise",
+      "rationale": "Promising but needs a stronger leakage guard for validation terms.",
+      "required_revisions": [
+        "Define the vocabulary source before seeing test results",
+        "Add an ablation without the adapter"
+      ]
+    },
+    {
+      "idea_id": "idea_late_fusion_score",
+      "scores": {
+        "novelty": 3,
+        "feasibility": 3,
+        "reproducibility": 3,
+        "baseline_compatibility": 4,
+        "experiment_design": 3,
+        "evidence_consistency": 3
+      },
+      "decision": "kill",
+      "rationale": "The extra probes create too much latency risk for the first demo contract."
+    }
+  ],
+  "ranking": [
+    "idea_structured_negatives",
+    "idea_query_adapter",
+    "idea_late_fusion_score"
+  ],
+  "recommended_idea_id": "idea_structured_negatives"
+}

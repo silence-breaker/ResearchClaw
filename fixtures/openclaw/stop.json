@@ -1,0 +1,22 @@
+{
+  "event": "stop",
+  "instruction": "Session stopped for demo_001",
+  "timestamp": "2026-05-31T00:00:03.000Z",
+  "sessionId": "sess_demo_001",
+  "projectPath": "/home/wj/openclaw",
+  "projectName": "demo_001",
+  "signal": {
+    "kind": "session",
+    "name": "session",
+    "phase": "idle",
+    "routeKey": "session.idle",
+    "priority": "low",
+    "summary": "Session stopped"
+  },
+  "context": {
+    "sessionId": "sess_demo_001",
+    "projectPath": "/home/wj/openclaw",
+    "reason": "manual stop",
+    "tmuxTail": "demo completed"
+  }
+}

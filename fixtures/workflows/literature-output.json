@@ -1,0 +1,47 @@
+[
+  {
+    "id": "paper_contrastive_vl_retrieval",
+    "title": "Contrastive Vision-Language Pretraining for Cross-Modal Retrieval",
+    "venue": "ICML",
+    "year": 2021,
+    "url": "https://example.org/papers/contrastive-vl-retrieval",
+    "code_url": "https://example.org/code/contrastive-vl-retrieval",
+    "relevance": "high",
+    "why_relevant": "Provides an open retrieval baseline and standard recall@K evaluation.",
+    "baseline_potential": "strong",
+    "notes": [
+      "Uses public data splits",
+      "Reports recall@1/5/10"
+    ]
+  },
+  {
+    "id": "paper_hard_negative_rerank",
+    "title": "Hard Negative Mining for Efficient Multimodal Reranking",
+    "venue": "CVPR",
+    "year": 2022,
+    "url": "https://example.org/papers/hard-negative-rerank",
+    "code_url": "https://example.org/code/hard-negative-rerank",
+    "relevance": "high",
+    "why_relevant": "Directly studies reranking with structured negative examples.",
+    "baseline_potential": "strong",
+    "notes": [
+      "Useful mechanism evidence",
+      "Compatible with same-split comparison"
+    ]
+  },
+  {
+    "id": "paper_domain_retrieval_eval",
+    "title": "Domain-Specific Evaluation for Vision-Language Retrieval",
+    "venue": "NeurIPS",
+    "year": 2023,
+    "url": "https://example.org/papers/domain-retrieval-eval",
+    "code_url": "https://example.org/code/domain-retrieval-eval",
+    "relevance": "medium",
+    "why_relevant": "Defines domain transfer evaluation practices and failure modes.",
+    "baseline_potential": "possible",
+    "notes": [
+      "Good for evaluation protocol",
+      "Dataset access needs human confirmation"
+    ]
+  }
+]
