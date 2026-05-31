@@ -1,4 +1,4 @@
-import { approveContract, reviseContract } from "../contract/contract.js";
+import { approveContract } from "../contract/contract.js";
 import { MockModelAdapter } from "../adapters/mock.js";
 import { createArtifact } from "../evidence/types.js";
 import { makeId, nowIso, publicStateSummary } from "../util.js";
@@ -11,12 +11,24 @@ import { runSummaryWorkflow } from "../workflows/summary.js";
 import { touchState, recordPhase, recordSignal } from "./state.js";
 import {
   baselineGate,
+  claimEvidenceGate,
   contractGate,
   evidenceGate,
+  ideaGate,
   literatureGate,
   reproductionChecklistGate,
   reviewGate
 } from "./gates.js";
+
+// state.current ref key -> artifact type, used to tell claimEvidenceGate what evidence exists.
+const artifactTypeByStateKey = {
+  contract_artifact_ref: "contract",
+  literature_artifact_ref: "paper_cards",
+  baseline_artifact_ref: "baseline_decision",
+  checklist_artifact_ref: "reproduction_checklist",
+  idea_artifact_ref: "idea_cards",
+  review_artifact_ref: "idea_review_report"
+};
 
 const phaseRunLabels = {
   literature_scouting: "Run literature scouting",
@@ -25,6 +37,17 @@ const phaseRunLabels = {
   idea_generation: "Run idea generation",
   idea_review: "Run idea review",
   summary: "Write summary"
+};
+
+// When a phase gate fails, which re-runnable upstream phase to fall back to.
+// blocked stays the visible state, but it carries this target so recover() can leave it.
+const retreatTargets = {
+  literature_scouting: "literature_scouting",
+  baseline_selection: "literature_scouting",
+  baseline_reproduction_checklist: "baseline_selection",
+  idea_generation: "idea_generation",
+  idea_review: "idea_generation",
+  summary: "idea_review"
 };
 
 function setRunPhaseAction(state, phase) {
@@ -229,27 +252,30 @@ export class ResearchOrchestrator {
     if (request.artifact_id && request.artifact_id !== currentArtifact.artifact_id) {
       throw new Error("Revision artifact_id does not match the active contract");
     }
-    const revised = reviseContract(currentArtifact.content, request.feedback);
-    const revisedArtifact = createArtifact({
+    const revisedArtifact = await runContractDraftWorkflow({
+      adapter: this.adapter,
       projectId,
-      phase: "contract_draft",
-      type: "contract",
-      workflow: "manualRevision",
-      adapter: "manual",
+      userText: state.current.research_direction,
+      previousContract: currentArtifact.content,
+      feedback: request.feedback,
       inputRefs: [currentRef],
-      evidenceRefs: [currentRef],
-      content: revised,
-      status: "draft"
+      evidenceRefs: [currentRef]
     });
+    const gate = contractGate(revisedArtifact.content);
     const revisedRef = this.store.appendArtifact(revisedArtifact);
-    state.phase = "contract_review";
     state.current.contract_artifact_ref = revisedRef;
     state.current.contract_artifact_id = revisedArtifact.artifact_id;
     state.contract_versions.push({
-      version: revised.version,
+      version: revisedArtifact.content.version,
       artifact_ref: revisedRef,
-      status: "draft"
+      status: revisedArtifact.status
     });
+    if (!gate.ok) {
+      this.blockWithoutWrite(state, "contract_draft", [revisedRef], gate.errors);
+      return this.finishManual(state, ["blocked"]);
+    }
+    recordPhase(state, "contract_draft", [revisedRef], "pass");
+    state.phase = "contract_review";
     state.pending_human_actions = [
       {
         type: "approve_or_revise",
@@ -259,7 +285,6 @@ export class ResearchOrchestrator {
         label: "Approve or revise contract"
       }
     ];
-    recordPhase(state, "contract_draft", [revisedRef], "pass");
     recordPhase(state, "contract_review", [revisedRef], "manual");
     return this.finishManual(state, ["contract_revised", "human_approval_required"]);
   }
@@ -325,7 +350,7 @@ export class ResearchOrchestrator {
     });
     const baselineRef = this.store.appendArtifact(baselineArtifact);
     state.current.baseline_artifact_ref = baselineRef;
-    const check = baselineGate(baselineArtifact.content);
+    const check = baselineGate(baselineArtifact.content, { paperCards: literature.content });
     if (!check.ok) {
       this.blockWithoutWrite(state, "baseline_selection", [baselineRef], check.errors);
       return;
@@ -348,7 +373,7 @@ export class ResearchOrchestrator {
     });
     const checklistRef = this.store.appendArtifact(checklistArtifact);
     state.current.checklist_artifact_ref = checklistRef;
-    const check = reproductionChecklistGate(checklistArtifact.content);
+    const check = reproductionChecklistGate(checklistArtifact.content, { contract });
     if (!check.ok) {
       this.blockWithoutWrite(state, "baseline_reproduction_checklist", [checklistRef], check.errors);
       return;
@@ -385,8 +410,9 @@ export class ResearchOrchestrator {
     });
     const ideaRef = this.store.appendArtifact(ideaArtifact);
     state.current.idea_artifact_ref = ideaRef;
-    if (!Array.isArray(ideaArtifact.content) || ideaArtifact.content.length < 3) {
-      this.blockWithoutWrite(state, "idea_generation", [ideaRef], ["idea cards must contain at least 3 items"]);
+    const check = ideaGate(ideaArtifact.content);
+    if (!check.ok) {
+      this.blockWithoutWrite(state, "idea_generation", [ideaRef], check.errors);
       return;
     }
     recordPhase(state, "idea_generation", [ideaRef], "pass");
@@ -425,6 +451,17 @@ export class ResearchOrchestrator {
       this.blockWithoutWrite(state, "summary", [], evidenceCheck.errors);
       return;
     }
+    const { contract } = this.getContract(state);
+    const claimCheck = claimEvidenceGate(contract, {
+      availableArtifacts: this.availableArtifacts(state),
+      completedPhases: state.phase_history
+        .filter((entry) => entry.gate_result === "pass")
+        .map((entry) => entry.phase)
+    });
+    if (!claimCheck.ok) {
+      this.blockWithoutWrite(state, "summary", [], claimCheck.errors);
+      return;
+    }
     const review = this.readCurrentArtifact(state, "review_artifact_ref");
     const refs = [
       state.current.contract_artifact_ref,
@@ -439,6 +476,7 @@ export class ResearchOrchestrator {
       projectId: state.project_id,
       state,
       review: review.content,
+      evidenceIndex: claimCheck.evidence_index,
       inputRefs: refs,
       evidenceRefs: refs
     });
@@ -459,6 +497,12 @@ export class ResearchOrchestrator {
     }
     const artifact = this.store.readArtifact(state.project_id, ref);
     return { contract: artifact.content, ref, artifact };
+  }
+
+  availableArtifacts(state) {
+    return Object.entries(artifactTypeByStateKey)
+      .filter(([key]) => state.current?.[key])
+      .map(([key, type]) => ({ type, ref: state.current[key] }));
   }
 
   readCurrentArtifact(state, key) {
@@ -492,15 +536,35 @@ export class ResearchOrchestrator {
   }
 
   blockWithoutWrite(state, phase, artifactRefs, errors) {
+    const retreatTo = retreatTargets[phase];
     state.phase = "blocked";
+    state.block = { failed_phase: phase, retreat_to: retreatTo, errors };
     state.pending_human_actions = [
       {
         type: "revise_required",
         phase,
-        errors
+        retreat_to: retreatTo,
+        errors,
+        label: retreatTo ? `Fix and re-run from ${retreatTo}` : "Manual revision required"
       }
     ];
     recordPhase(state, phase, artifactRefs, "fail");
+  }
+
+  async recover(projectId, request = {}) {
+    const state = this.store.readState(projectId);
+    if (state.phase !== "blocked") {
+      throw new Error("recover is only available from a blocked state");
+    }
+    const target = request.to || state.block?.retreat_to;
+    if (!target) {
+      throw new Error("No retreat target is available to recover to");
+    }
+    state.phase = target;
+    delete state.block;
+    setRunPhaseAction(state, target);
+    recordPhase(state, target, [], "manual");
+    return this.finishManual(state, [`recovered_to_${target}`]);
   }
 
   block(state, signal, phase, artifactRefs, errors) {

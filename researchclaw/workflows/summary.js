@@ -5,6 +5,7 @@ export async function runSummaryWorkflow({
   projectId,
   state,
   review,
+  evidenceIndex = [],
   inputRefs = [],
   evidenceRefs = []
 }) {
@@ -23,6 +24,11 @@ export async function runSummaryWorkflow({
         ref: "idea_review_report",
         type: "idea_review_report",
         content: review
+      },
+      {
+        ref: "evidence_index",
+        type: "evidence_index",
+        content: evidenceIndex
       }
     ],
     output_schema: "DemoSummary"

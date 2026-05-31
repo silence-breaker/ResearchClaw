@@ -36,6 +36,19 @@ export class MockModelAdapter {
   outputFor(request) {
     switch (request.phase) {
       case "contract_draft": {
+        const feedback = request.inputs?.find((input) => input.type === "revision_feedback")?.content;
+        const previous = request.inputs?.find((input) => input.type === "research_contract")?.content;
+        if (feedback && previous) {
+          const revised = deepClone(previous);
+          revised.version = Number(revised.version || 1) + 1;
+          revised.contract_id = `${previous.contract_id}_v${revised.version}`;
+          revised.status = "draft";
+          revised.human_notes = [previous.human_notes, `Revision request: ${feedback}`]
+            .filter(Boolean)
+            .join("\n");
+          revised.updated_at = nowIso();
+          return revised;
+        }
         const contract = deepClone(readJsonUrl(fixtures.contract));
         contract.project_id = request.project_id;
         contract.contract_id = makeId("contract");
@@ -64,20 +77,14 @@ export class MockModelAdapter {
   summaryFor(request) {
     const state = request.inputs?.find((input) => input.type === "state")?.content;
     const review = request.inputs?.find((input) => input.type === "idea_review_report")?.content;
+    const evidenceIndex = request.inputs?.find((input) => input.type === "evidence_index")?.content || [];
     return {
       project_id: request.project_id,
       contract_ref: state?.current?.contract_artifact_ref,
       selected_baseline_ref: state?.current?.baseline_artifact_ref,
       recommended_idea_ref: review?.recommended_idea_id,
       phase_history: state?.phase_history || [],
-      evidence_index: [
-        {
-          claim: "Contract, baseline, idea, and review conclusions are backed by stored artifacts.",
-          evidence_refs: Object.values(state?.current || {}).filter(
-            (value) => typeof value === "string" && value.startsWith("artifacts/")
-          )
-        }
-      ],
+      evidence_index: evidenceIndex,
       next_human_actions: [
         "Confirm baseline dataset license and hardware budget.",
         "Run the baseline reproduction checklist before implementation.",
