@@ -1,6 +1,8 @@
-import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
-import { fetchProjects } from "../api/client";
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, useNavigate } from "react-router-dom";
+import { fetchProjects, startProject } from "../api/client";
+import { makeProjectId } from "../lib/project";
 import type { ProjectSummary } from "../api/types";
 
 function statusLabel(p: ProjectSummary): { text: string; cls: string } {
@@ -9,13 +11,70 @@ function statusLabel(p: ProjectSummary): { text: string; cls: string } {
   return { text: "运行中", cls: "text-accent-green" };
 }
 
+function randomSuffix(): string {
+  return crypto.randomUUID().replace(/-/g, "").slice(0, 6);
+}
+
+function NewProjectForm() {
+  const [direction, setDirection] = useState("");
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: (text: string) => {
+      const projectId = makeProjectId(text, randomSuffix());
+      return startProject(projectId, text).then(() => projectId);
+    },
+    onSuccess: (projectId) => {
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      navigate(`/panel/${projectId}`);
+    }
+  });
+
+  const trimmed = direction.trim();
+  return (
+    <form
+      className="mt-6 rounded-lg border border-panel-border bg-panel-surface p-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (trimmed) mutation.mutate(trimmed);
+      }}
+    >
+      <label className="text-sm font-medium text-panel-text">新建研究</label>
+      <p className="mt-0.5 text-xs text-panel-muted">
+        输入研究方向，创建后引擎会起草研究契约并进入「契约待审」，由你批准或打回。
+      </p>
+      <div className="mt-3 flex gap-2">
+        <input
+          value={direction}
+          onChange={(e) => setDirection(e.target.value)}
+          placeholder="例如：轻量级重排序提升领域内视觉-语言检索质量"
+          className="flex-1 rounded border border-panel-border bg-panel-bg px-3 py-2 text-sm text-panel-text outline-none focus:border-accent"
+        />
+        <button
+          type="submit"
+          disabled={!trimmed || mutation.isPending}
+          className="rounded bg-accent px-4 py-2 text-sm font-medium text-panel-bg hover:opacity-90 disabled:opacity-50"
+        >
+          {mutation.isPending ? "创建中…" : "创建"}
+        </button>
+      </div>
+      {mutation.isError && (
+        <p className="mt-2 text-sm text-accent-red">创建失败：{(mutation.error as Error).message}</p>
+      )}
+    </form>
+  );
+}
+
 export function ProjectList() {
   const query = useQuery({ queryKey: ["projects"], queryFn: fetchProjects });
 
   return (
     <div className="mx-auto max-w-3xl p-8">
       <h1 className="text-xl font-semibold text-accent">ResearchClaw 控制台</h1>
-      <p className="mt-1 text-sm text-panel-muted">选择一个研究项目进入实时面板。</p>
+      <p className="mt-1 text-sm text-panel-muted">选择一个研究项目进入实时面板，或新建一个研究。</p>
+
+      <NewProjectForm />
 
       {query.isLoading && <p className="mt-6 text-panel-muted">加载项目列表…</p>}
       {query.isError && <p className="mt-6 text-accent-red">无法加载项目（后端是否在 :8787 运行？）。</p>}

@@ -60,8 +60,8 @@ export function ContractTab({ state }: { state: ProjectState }) {
           研究契约 v{contract.version ?? "?"}
         </span>
         <span className="text-xs text-panel-muted">{query.data.status}</span>
-        {/* approve / revise 是 M1.3，这里只读 */}
-        <span className="ml-auto text-[10px] text-panel-muted">只读（操作见 M1.3）</span>
+        {/* 操作（批准/修订）在上方「待办操作」区，这里只读展示 */}
+        <span className="ml-auto text-[10px] text-panel-muted">只读（批准 / 修订见上方操作区）</span>
       </div>
       <Field label="主题">{contract.topic ?? "—"}</Field>
       <Field label="研究问题">{contract.research_question ?? "—"}</Field>
@@ -91,6 +91,13 @@ export function ContractTab({ state }: { state: ProjectState }) {
           {JSON.stringify(contract.data_split ?? "—", null, 2)}
         </pre>
       </Field>
+      {contract.human_notes?.trim() && (
+        <Field label="修订记录 / 人工备注">
+          <div className="whitespace-pre-line rounded bg-panel-bg p-2 text-sm text-panel-text">
+            {contract.human_notes}
+          </div>
+        </Field>
+      )}
     </div>
   );
 }

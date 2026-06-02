@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { ProjectState } from "../api/types";
+import { ActionBar } from "./ActionBar";
 import { MetricsRow } from "./MetricsRow";
 import { PipelineProgress } from "./PipelineProgress";
 import { ContractTab } from "./ContractTab";
@@ -25,6 +26,7 @@ export function CenterColumn({ state }: { state: ProjectState }) {
         </div>
       </header>
 
+      <ActionBar state={state} />
       <MetricsRow state={state} />
       <PipelineProgress state={state} />
 
