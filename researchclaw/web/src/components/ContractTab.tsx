@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchArtifact } from "../api/client";
-import type { Artifact, ProjectState, ResearchContract } from "../api/types";
+import type { Artifact, ContractCriterion, ProjectState, ResearchContract } from "../api/types";
+import { criterionMeta } from "../lib/contract";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -11,13 +12,24 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function List({ items }: { items?: string[] }) {
+function CriteriaList({ items }: { items?: ContractCriterion[] }) {
   if (!items?.length) return <span className="text-panel-muted">—</span>;
   return (
-    <ul className="list-disc space-y-1 pl-5">
-      {items.map((item, i) => (
-        <li key={i}>{item}</li>
-      ))}
+    <ul className="space-y-2">
+      {items.map((c, i) => {
+        const meta = criterionMeta(c);
+        return (
+          <li key={c.id ?? i} className="flex gap-2">
+            <span className="mt-0.5 shrink-0 rounded bg-panel-bg px-1.5 py-0.5 font-mono text-[10px] text-accent">
+              {c.id ?? `#${i + 1}`}
+            </span>
+            <div>
+              <div>{c.description}</div>
+              {meta && <div className="mt-0.5 font-mono text-xs text-panel-muted">{meta}</div>}
+            </div>
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -55,10 +67,10 @@ export function ContractTab({ state }: { state: ProjectState }) {
       <Field label="研究问题">{contract.research_question ?? "—"}</Field>
       <Field label="假设">{contract.hypothesis ?? "—"}</Field>
       <Field label="成功标准">
-        <List items={contract.success_criteria} />
+        <CriteriaList items={contract.success_criteria} />
       </Field>
       <Field label="失败信号">
-        <List items={contract.failure_signals} />
+        <CriteriaList items={contract.failure_signals} />
       </Field>
       <Field label="关键指标">
         {contract.metrics?.length ? (

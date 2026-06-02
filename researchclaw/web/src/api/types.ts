@@ -125,6 +125,14 @@ export interface EvidenceIndexEntry {
   pending: { evidence: string; reason: string }[];
 }
 
+// A success criterion / failure signal entry (backend shape, not a bare string).
+export interface ContractCriterion {
+  id: string;
+  description: string;
+  metric?: string;
+  threshold?: string;
+}
+
 // Shape of an approved/draft research contract's content (subset we render).
 export interface ResearchContract {
   contract_id?: string;
@@ -132,9 +140,9 @@ export interface ResearchContract {
   topic?: string;
   research_question?: string;
   hypothesis?: string;
-  success_criteria?: string[];
-  failure_signals?: string[];
-  metrics?: { name: string; direction?: string }[];
+  success_criteria?: ContractCriterion[];
+  failure_signals?: ContractCriterion[];
+  metrics?: { name: string; direction?: string; reason?: string }[];
   data_split?: Record<string, unknown> | string;
   claim_evidence_map?: { claim_id: string; claim: string; required_evidence: string[] }[];
   human_notes?: string;
