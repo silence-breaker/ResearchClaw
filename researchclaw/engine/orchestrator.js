@@ -61,9 +61,17 @@ function setRunPhaseAction(state, phase) {
 }
 
 export class ResearchOrchestrator {
-  constructor({ store, adapter = new MockModelAdapter() }) {
+  constructor({ store, adapter = new MockModelAdapter(), eventBus = null }) {
     this.store = store;
     this.adapter = adapter;
+    this.eventBus = eventBus;
+  }
+
+  emitSnapshot(state) {
+    if (!this.eventBus) {
+      return;
+    }
+    this.eventBus.emit(state.project_id, { type: "snapshot", data: state });
   }
 
   async handle(signal) {
@@ -575,6 +583,7 @@ export class ResearchOrchestrator {
   finishManual(state, actions) {
     touchState(state);
     this.store.writeState(state);
+    this.emitSnapshot(state);
     return {
       ok: true,
       project_id: state.project_id,
@@ -588,6 +597,7 @@ export class ResearchOrchestrator {
   finish(state, signal, actions) {
     touchState(state);
     this.store.writeState(state);
+    this.emitSnapshot(state);
     return {
       ok: true,
       project_id: state.project_id,
