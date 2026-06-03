@@ -1,0 +1,20 @@
+{
+  "event": "session-start",
+  "instruction": "ResearchClaw session started for demo_001",
+  "timestamp": "2026-05-31T00:00:00.000Z",
+  "sessionId": "sess_demo_001",
+  "projectPath": "/home/wj/openclaw",
+  "projectName": "demo_001",
+  "signal": {
+    "kind": "session",
+    "name": "session",
+    "phase": "started",
+    "routeKey": "session.started",
+    "priority": "high",
+    "summary": "Session started"
+  },
+  "context": {
+    "sessionId": "sess_demo_001",
+    "projectPath": "/home/wj/openclaw"
+  }
+}
