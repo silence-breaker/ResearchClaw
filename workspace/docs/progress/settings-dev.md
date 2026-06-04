@@ -34,6 +34,9 @@
 | Step 7 | 外观设置独立分类 | `routes/SettingsPage.tsx` | 浏览器手验 |
 | Step 7 | 系统分类（版本/缓存/恢复默认/导入导出占位） | `routes/SettingsPage.tsx` | 浏览器手验 |
 | Step 7 | SettingsEffect 接入辅助功能 CSS 类 | `components/SettingsEffect.tsx` + `tailwind.css` | 浏览器手验 |
+| Step 8 | 个人资料与账户完整 UI | `components/ProfileSettings.tsx` | 浏览器手验 |
+| Step 8 | UserProfile 类型 + 工具 + 测试 | `lib/user.ts` + `lib/user.test.ts` | 10/10 |
+| Step 8 | User Zustand store（多账户、头像上传、编辑） | `stores/user.ts` | 浏览器手验 |
 
 ---
 
