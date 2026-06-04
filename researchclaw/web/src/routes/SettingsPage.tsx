@@ -4,11 +4,11 @@ import { useSettingsStore } from "../stores/settings";
 import type { AppSettings } from "../lib/settings";
 
 const CATEGORIES = [
+  { id: "profile", label: "个人资料与账户", icon: "👤" },
   { id: "general", label: "通用", icon: "⚙️" },
+  { id: "appearance", label: "外观", icon: "🎨" },
   { id: "model", label: "模型", icon: "🖥️" },
   { id: "notifications", label: "通知", icon: "🔔" },
-  { id: "profile", label: "个人资料与账户", icon: "👤" },
-  { id: "appearance", label: "外观", icon: "🎨" },
   { id: "security", label: "安全", icon: "🔒" },
   { id: "accessibility", label: "辅助功能", icon: "♿" },
   { id: "system", label: "系统", icon: "💻" }
@@ -17,7 +17,7 @@ const CATEGORIES = [
 type CategoryId = (typeof CATEGORIES)[number]["id"];
 
 export function SettingsPage() {
-  const [category, setCategory] = useState<CategoryId>("general");
+  const [category, setCategory] = useState<CategoryId>("profile");
 
   return (
     <div className="flex min-h-screen">
