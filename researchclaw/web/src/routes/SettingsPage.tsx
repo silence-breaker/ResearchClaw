@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { LeftColumn } from "../components/LeftColumn";
 import { ProfileSettings } from "../components/ProfileSettings";
 import { useSettingsStore } from "../stores/settings";
-import type { AppSettings } from "../lib/settings";
+import { FONT_FAMILY_OPTIONS, DEFAULT_MODEL_COLORS, type AppSettings } from "../lib/settings";
 
 /* ── Category definitions ── */
 
@@ -406,6 +406,8 @@ function GeneralSettings() {
 
 /* ── Category: Appearance ── */
 
+const MODEL_COLOR_ENTRIES = Object.entries(DEFAULT_MODEL_COLORS).filter(([k]) => k !== "default");
+
 function AppearanceSettings() {
   const { settings, update, reset } = useSettingsStore();
   const [draft, setDraft] = useState<AppSettings>(settings);
@@ -420,6 +422,13 @@ function AppearanceSettings() {
     update(draft);
     setSavedMsg("已保存");
     setTimeout(() => setSavedMsg(null), 1500);
+  };
+
+  const patchModelColor = (model: string, color: string) => {
+    setDraft((d) => ({
+      ...d,
+      modelColors: { ...d.modelColors, [model]: color }
+    }));
   };
 
   return (
@@ -447,9 +456,25 @@ function AppearanceSettings() {
             ))}
           </div>
         </Field>
+        <ToggleField
+          label="夜间模式"
+          description="降低蓝光，适合暗光环境使用"
+          checked={draft.nightMode}
+          onChange={(v) => patch({ nightMode: v })}
+        />
       </Section>
 
-      <Section title="字体与排版">
+      <Section title="显示">
+        <Field label="界面亮度" description={`当前: ${draft.brightness}%`}>
+          <input
+            type="range"
+            min={80}
+            max={120}
+            value={draft.brightness}
+            onChange={(e) => patch({ brightness: Number(e.target.value) })}
+            className="w-32 accent-accent"
+          />
+        </Field>
         <Field label="界面字体大小" description={`当前: ${draft.fontSize}px`}>
           <input
             type="range"
@@ -478,15 +503,20 @@ function AppearanceSettings() {
             ))}
           </div>
         </Field>
-        <Field label="代码块字体">
+      </Section>
+
+      <Section title="字体">
+        <Field label="字体" description="所有文本统一使用此字体">
           <select
-            value={draft.codeFont}
-            onChange={(e) => patch({ codeFont: e.target.value as AppSettings["codeFont"] })}
+            value={draft.fontFamily}
+            onChange={(e) => patch({ fontFamily: e.target.value })}
             className="rounded border border-panel-border bg-panel-bg px-3 py-1.5 text-sm text-panel-text outline-none focus:border-accent"
           >
-            <option value="JetBrains Mono">JetBrains Mono</option>
-            <option value="Fira Code">Fira Code</option>
-            <option value="SF Mono">SF Mono</option>
+            {FONT_FAMILY_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
           </select>
         </Field>
       </Section>
@@ -514,6 +544,30 @@ function AppearanceSettings() {
             ))}
           </div>
         </Field>
+      </Section>
+
+      <Section title="模型标识色">
+        <Field label="" description="对话中各 AI 模型的背景标识色">
+          <div />
+        </Field>
+        {MODEL_COLOR_ENTRIES.map(([model, defaultColor]) => (
+          <Field
+            key={model}
+            label={model.charAt(0).toUpperCase() + model.slice(1)}
+          >
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                value={draft.modelColors[model] ?? defaultColor}
+                onChange={(e) => patchModelColor(model, e.target.value)}
+                className="h-7 w-7 cursor-pointer rounded border border-panel-border bg-transparent p-0.5"
+              />
+              <span className="text-xs text-panel-muted font-mono">
+                {draft.modelColors[model] ?? defaultColor}
+              </span>
+            </div>
+          </Field>
+        ))}
       </Section>
 
       <SaveBar

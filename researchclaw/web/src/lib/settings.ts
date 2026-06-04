@@ -6,7 +6,6 @@ export type Language = "zh-CN" | "en";
 export type DateFormat = "YYYY-MM-DD" | "MM/DD/YYYY" | "DD/MM/YYYY";
 export type Density = "compact" | "comfortable" | "spacious";
 export type AccentColor = "blue" | "cyan" | "pink" | "orange" | "green";
-export type CodeFont = "JetBrains Mono" | "Fira Code" | "SF Mono";
 export type AutoSaveInterval = "off" | "30s" | "1m" | "5m";
 export type StartupPage = "projects" | "last" | "blank";
 
@@ -24,8 +23,11 @@ export interface AppSettings {
   theme: ThemeMode;
   fontSize: number;
   density: Density;
-  codeFont: CodeFont;
+  fontFamily: string;
   accentColor: AccentColor;
+  brightness: number;
+  nightMode: boolean;
+  modelColors: Record<string, string>;
 
   // ── Accessibility ──
   reduceMotion: boolean;
@@ -33,6 +35,14 @@ export interface AppSettings {
   screenReaderOptimized: boolean;
   focusIndicator: boolean;
 }
+
+export const DEFAULT_MODEL_COLORS: Record<string, string> = {
+  claude: "#e74c3c",
+  gemini: "#27ae60",
+  gpt: "#3498db",
+  codex: "#9b59b6",
+  default: "#95a5a6"
+};
 
 export const DEFAULT_SETTINGS: AppSettings = {
   language: "zh-CN",
@@ -45,8 +55,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
   theme: "dark",
   fontSize: 14,
   density: "comfortable",
-  codeFont: "JetBrains Mono",
+  fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
   accentColor: "blue",
+  brightness: 100,
+  nightMode: false,
+  modelColors: { ...DEFAULT_MODEL_COLORS },
   reduceMotion: false,
   highContrast: false,
   screenReaderOptimized: false,
@@ -58,30 +71,45 @@ export const VALID_LANGUAGES: Language[] = ["zh-CN", "en"];
 export const VALID_DATE_FORMATS: DateFormat[] = ["YYYY-MM-DD", "MM/DD/YYYY", "DD/MM/YYYY"];
 export const VALID_DENSITIES: Density[] = ["compact", "comfortable", "spacious"];
 export const VALID_ACCENT_COLORS: AccentColor[] = ["blue", "cyan", "pink", "orange", "green"];
-export const VALID_CODE_FONTS: CodeFont[] = ["JetBrains Mono", "Fira Code", "SF Mono"];
 export const VALID_AUTO_SAVE_INTERVALS: AutoSaveInterval[] = ["off", "30s", "1m", "5m"];
 export const VALID_STARTUP_PAGES: StartupPage[] = ["projects", "last", "blank"];
 
 export const FONT_SIZE_MIN = 12;
 export const FONT_SIZE_MAX = 18;
+export const BRIGHTNESS_MIN = 80;
+export const BRIGHTNESS_MAX = 120;
 
 export function clampFontSize(n: number): number {
   return Math.max(FONT_SIZE_MIN, Math.min(FONT_SIZE_MAX, Math.round(n)));
+}
+
+export function clampBrightness(n: number): number {
+  return Math.max(BRIGHTNESS_MIN, Math.min(BRIGHTNESS_MAX, Math.round(n)));
 }
 
 export function isValidAccentColor(c: string): c is AccentColor {
   return VALID_ACCENT_COLORS.includes(c as AccentColor);
 }
 
-export function isValidCodeFont(f: string): f is CodeFont {
-  return VALID_CODE_FONTS.includes(f as CodeFont);
+function isValidModelColors(v: unknown): v is Record<string, string> {
+  if (!v || typeof v !== "object") return false;
+  return Object.entries(v as Record<string, unknown>).every(([, val]) => typeof val === "string");
 }
 
 export function migrateSettings(raw: unknown): AppSettings {
   if (!raw || typeof raw !== "object") {
     return { ...DEFAULT_SETTINGS };
   }
-  const partial = raw as Partial<AppSettings>;
+  const partial = raw as Partial<AppSettings> & { codeFont?: string };
+
+  // Migrate old codeFont -> fontFamily if present
+  let migratedFontFamily = DEFAULT_SETTINGS.fontFamily;
+  if (typeof partial.fontFamily === "string") {
+    migratedFontFamily = partial.fontFamily;
+  } else if (typeof partial.codeFont === "string") {
+    migratedFontFamily = partial.codeFont + ', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+  }
+
   return {
     language: VALID_LANGUAGES.includes(partial.language as Language)
       ? (partial.language as Language)
@@ -109,10 +137,15 @@ export function migrateSettings(raw: unknown): AppSettings {
     density: VALID_DENSITIES.includes(partial.density as Density)
       ? (partial.density as Density)
       : DEFAULT_SETTINGS.density,
-    codeFont: isValidCodeFont(partial.codeFont as string) ? (partial.codeFont as CodeFont) : DEFAULT_SETTINGS.codeFont,
+    fontFamily: migratedFontFamily,
     accentColor: isValidAccentColor(partial.accentColor as string)
       ? (partial.accentColor as AccentColor)
       : DEFAULT_SETTINGS.accentColor,
+    brightness: clampBrightness(typeof partial.brightness === "number" ? partial.brightness : DEFAULT_SETTINGS.brightness),
+    nightMode: typeof partial.nightMode === "boolean" ? partial.nightMode : DEFAULT_SETTINGS.nightMode,
+    modelColors: isValidModelColors(partial.modelColors)
+      ? (partial.modelColors as Record<string, string>)
+      : { ...DEFAULT_SETTINGS.modelColors },
     reduceMotion: typeof partial.reduceMotion === "boolean" ? partial.reduceMotion : DEFAULT_SETTINGS.reduceMotion,
     highContrast: typeof partial.highContrast === "boolean" ? partial.highContrast : DEFAULT_SETTINGS.highContrast,
     screenReaderOptimized:
@@ -123,3 +156,22 @@ export function migrateSettings(raw: unknown): AppSettings {
       typeof partial.focusIndicator === "boolean" ? partial.focusIndicator : DEFAULT_SETTINGS.focusIndicator
   };
 }
+
+export const FONT_FAMILY_OPTIONS: { value: string; label: string }[] = [
+  {
+    value: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
+    label: "系统默认"
+  },
+  {
+    value: '"Inter", ui-sans-serif, system-ui, sans-serif',
+    label: "Inter"
+  },
+  {
+    value: '"Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif',
+    label: "Noto Sans SC (思源黑体)"
+  },
+  {
+    value: '"LXGW WenKai", "PingFang SC", sans-serif',
+    label: "霞鹜文楷"
+  }
+];

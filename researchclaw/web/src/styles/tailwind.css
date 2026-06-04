@@ -5,9 +5,10 @@
 :root {
   color-scheme: dark;
   --rc-font-size: 14px;
-  --rc-code-font: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --rc-font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --rc-accent: #58a6ff;
   --rc-density: 1;
+  --rc-brightness: 100%;
 }
 
 html {
@@ -18,11 +19,14 @@ body {
   margin: 0;
   background-color: #0d1117;
   color: #c9d1d9;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: var(--rc-font-family);
+  filter: brightness(var(--rc-brightness));
 }
 
-.font-mono {
-  font-family: var(--rc-code-font);
+/* ── Night mode: reduce blue light on dark backgrounds ── */
+
+.rc-night-mode body {
+  filter: brightness(var(--rc-brightness)) sepia(0.08) hue-rotate(-12deg);
 }
 
 /* ── Accessibility ── */
