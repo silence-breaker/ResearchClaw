@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { LeftColumn } from "../components/LeftColumn";
+import { ProfileSettings } from "../components/ProfileSettings";
 import { useSettingsStore } from "../stores/settings";
 import type { AppSettings } from "../lib/settings";
 
@@ -49,7 +50,7 @@ export function SettingsPage() {
           {category === "general" && <GeneralSettings />}
           {category === "model" && <PlaceholderSettings title="模型" description="模型选择、Token 限制、工具白名单等配置将在 M2 接入真实 CLI 后开放。" />}
           {category === "notifications" && <PlaceholderSettings title="通知" />}
-          {category === "profile" && <PlaceholderSettings title="个人资料与账户" />}
+          {category === "profile" && <ProfileSettings />}
           {category === "appearance" && <AppearanceSettings />}
           {category === "security" && <PlaceholderSettings title="安全" />}
           {category === "accessibility" && <AccessibilitySettings />}
