@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { LeftColumn } from "../components/LeftColumn";
+import { useSettingsStore } from "../stores/settings";
+import type { AppSettings } from "../lib/settings";
 
 const CATEGORIES = [
   { id: "general", label: "通用", icon: "⚙️" },
@@ -82,15 +84,42 @@ function Field({
 }
 
 function GeneralSettings() {
+  const { settings, update, reset } = useSettingsStore();
+  const [draft, setDraft] = useState<AppSettings>(settings);
+  const [savedMsg, setSavedMsg] = useState<string | null>(null);
+
+  // Sync draft when persisted settings change externally.
+  useEffect(() => {
+    setDraft(settings);
+  }, [settings]);
+
+  const hasChanges = JSON.stringify(draft) !== JSON.stringify(settings);
+
+  const patch = (p: Partial<AppSettings>) => setDraft((d) => ({ ...d, ...p }));
+
+  const handleSave = () => {
+    update(draft);
+    setSavedMsg("已保存");
+    setTimeout(() => setSavedMsg(null), 1500);
+  };
+
+  const handleCancel = () => {
+    setDraft(settings);
+  };
+
   return (
     <div>
       <h2 className="mb-4 text-lg font-semibold text-panel-text">通用</h2>
 
       <Section title="语言与区域">
         <Field label="界面语言" description="设置系统界面的显示语言">
-          <select className="rounded border border-panel-border bg-panel-bg px-3 py-1.5 text-sm text-panel-text outline-none focus:border-accent">
-            <option>简体中文</option>
-            <option>English</option>
+          <select
+            value={draft.language}
+            onChange={(e) => patch({ language: e.target.value as AppSettings["language"] })}
+            className="rounded border border-panel-border bg-panel-bg px-3 py-1.5 text-sm text-panel-text outline-none focus:border-accent"
+          >
+            <option value="zh-CN">简体中文</option>
+            <option value="en">English</option>
           </select>
         </Field>
         <Field label="时区" description="所有时间戳将按此时区显示">
@@ -103,18 +132,19 @@ function GeneralSettings() {
         </Field>
         <Field label="日期格式">
           <div className="flex gap-3 text-sm text-panel-text">
-            <label className="flex items-center gap-1">
-              <input type="radio" name="dateFormat" defaultChecked className="accent-accent" />
-              YYYY-MM-DD
-            </label>
-            <label className="flex items-center gap-1">
-              <input type="radio" name="dateFormat" className="accent-accent" />
-              MM/DD/YYYY
-            </label>
-            <label className="flex items-center gap-1">
-              <input type="radio" name="dateFormat" className="accent-accent" />
-              DD/MM/YYYY
-            </label>
+            {(["YYYY-MM-DD", "MM/DD/YYYY", "DD/MM/YYYY"] as const).map((fmt) => (
+              <label key={fmt} className="flex cursor-pointer items-center gap-1">
+                <input
+                  type="radio"
+                  name="dateFormat"
+                  value={fmt}
+                  checked={draft.dateFormat === fmt}
+                  onChange={() => patch({ dateFormat: fmt })}
+                  className="accent-accent"
+                />
+                {fmt}
+              </label>
+            ))}
           </div>
         </Field>
       </Section>
@@ -122,57 +152,83 @@ function GeneralSettings() {
       <Section title="外观主题">
         <Field label="主题模式">
           <div className="flex gap-2">
-            {["浅色", "深色", "跟随系统"].map((m) => (
+            {[
+              { key: "light", label: "浅色" },
+              { key: "dark", label: "深色" },
+              { key: "system", label: "跟随系统" }
+            ].map((m) => (
               <button
-                key={m}
-                disabled={m === "浅色"}
-                className="rounded border border-panel-border bg-panel-bg px-3 py-1.5 text-xs text-panel-text disabled:cursor-not-allowed disabled:opacity-50 hover:border-accent"
+                key={m.key}
+                onClick={() => patch({ theme: m.key as AppSettings["theme"] })}
+                className={[
+                  "rounded border px-3 py-1.5 text-xs",
+                  draft.theme === m.key
+                    ? "border-accent bg-accent/10 text-accent"
+                    : "border-panel-border bg-panel-bg text-panel-text hover:border-accent"
+                ].join(" ")}
               >
-                {m}
+                {m.label}
               </button>
             ))}
           </div>
         </Field>
-        <Field label="界面字体大小" description="当前: 14px">
+        <Field label="界面字体大小" description={`当前: ${draft.fontSize}px`}>
           <input
             type="range"
             min={12}
             max={18}
-            defaultValue={14}
+            value={draft.fontSize}
+            onChange={(e) => patch({ fontSize: Number(e.target.value) })}
             className="w-32 accent-accent"
           />
         </Field>
         <Field label="界面密度">
           <div className="flex gap-2 text-xs">
-            {["紧凑", "舒适", "宽松"].map((d, i) => (
+            {(["compact", "comfortable", "spacious"] as const).map((d) => (
               <button
                 key={d}
+                onClick={() => patch({ density: d })}
                 className={[
                   "rounded border px-2 py-1",
-                  i === 1
+                  draft.density === d
                     ? "border-accent bg-accent/10 text-accent"
                     : "border-panel-border bg-panel-bg text-panel-text hover:border-accent"
                 ].join(" ")}
               >
-                {d}
+                {d === "compact" ? "紧凑" : d === "comfortable" ? "舒适" : "宽松"}
               </button>
             ))}
           </div>
         </Field>
         <Field label="代码块字体">
-          <select className="rounded border border-panel-border bg-panel-bg px-3 py-1.5 text-sm text-panel-text outline-none focus:border-accent">
-            <option>JetBrains Mono</option>
-            <option>Fira Code</option>
-            <option>SF Mono</option>
+          <select
+            value={draft.codeFont}
+            onChange={(e) => patch({ codeFont: e.target.value as AppSettings["codeFont"] })}
+            className="rounded border border-panel-border bg-panel-bg px-3 py-1.5 text-sm text-panel-text outline-none focus:border-accent"
+          >
+            <option value="JetBrains Mono">JetBrains Mono</option>
+            <option value="Fira Code">Fira Code</option>
+            <option value="SF Mono">SF Mono</option>
           </select>
         </Field>
         <Field label="强调色">
           <div className="flex gap-2">
-            {["#58a6ff", "#22d3ee", "#f472b6", "#fb923c", "#4ade80"].map((color) => (
-              <span
-                key={color}
-                className="h-6 w-6 rounded-full border border-panel-border"
-                style={{ backgroundColor: color }}
+            {([
+              { key: "blue", color: "#58a6ff" },
+              { key: "cyan", color: "#22d3ee" },
+              { key: "pink", color: "#f472b6" },
+              { key: "orange", color: "#fb923c" },
+              { key: "green", color: "#4ade80" }
+            ] as const).map((c) => (
+              <button
+                key={c.key}
+                onClick={() => patch({ accentColor: c.key })}
+                title={c.key}
+                className={[
+                  "h-6 w-6 rounded-full border-2",
+                  draft.accentColor === c.key ? "border-panel-text" : "border-transparent"
+                ].join(" ")}
+                style={{ backgroundColor: c.color }}
               />
             ))}
           </div>
@@ -180,12 +236,32 @@ function GeneralSettings() {
       </Section>
 
       <div className="sticky bottom-0 mt-4 flex items-center justify-end gap-2 border-t border-panel-border bg-panel-surface pt-3">
-        <span className="mr-auto text-xs text-accent-amber">有未保存的更改（当前仅占位）</span>
-        <button className="rounded border border-panel-border px-4 py-1.5 text-sm text-panel-text hover:bg-panel-bg">
+        {hasChanges ? (
+          <span className="mr-auto text-xs text-accent-amber">有未保存的更改</span>
+        ) : savedMsg ? (
+          <span className="mr-auto text-xs text-accent-green">{savedMsg}</span>
+        ) : (
+          <span className="mr-auto text-xs text-panel-muted">已同步到本地存储</span>
+        )}
+        <button
+          onClick={handleCancel}
+          disabled={!hasChanges}
+          className="rounded border border-panel-border px-4 py-1.5 text-sm text-panel-text hover:bg-panel-bg disabled:cursor-not-allowed disabled:opacity-50"
+        >
           取消
         </button>
-        <button className="rounded bg-accent px-4 py-1.5 text-sm font-medium text-panel-bg hover:opacity-90">
+        <button
+          onClick={handleSave}
+          disabled={!hasChanges}
+          className="rounded bg-accent px-4 py-1.5 text-sm font-medium text-panel-bg hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+        >
           保存更改
+        </button>
+        <button
+          onClick={reset}
+          className="rounded border border-accent-amber/50 px-3 py-1.5 text-xs text-accent-amber hover:bg-accent-amber/10"
+        >
+          恢复默认
         </button>
       </div>
     </div>

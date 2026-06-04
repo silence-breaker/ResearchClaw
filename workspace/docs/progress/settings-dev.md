@@ -7,9 +7,9 @@
 
 ## 当前状态
 
-**阶段**: Step 2~4 完成，Step 3 待开始
+**阶段**: Step 3 完成 — Settings 状态管理 + 表单绑定已落地
 
-**一句话**: `/settings` 路由已通，左栏「设置」可点击，设置页面骨架（分类菜单 + 内容区 + 通用/模型/通知/集成/账户 UI）已完成，typecheck + 26/26 测试通过。
+**一句话**: Zustand store + localStorage 持久化已接入；通用设置表单可控；保存/取消/恢复默认可用；主题/字体/密度/强调色通过 CSS 变量实时生效；typecheck + 30/30 测试通过。
 
 ---
 
@@ -22,8 +22,12 @@
 | Step 1 | 将 plan/进度文档移入 workspace 避免污染 | `workspace/docs/progress/settings-dev.md` | — |
 | Step 2 | 新增 `/settings` 路由 | `router.tsx` | 浏览器手验 |
 | Step 2 | 左栏「设置」从 placeholder 变为可点击路由 | `LeftColumn.tsx` | 浏览器手验 |
+| Step 3 | Zustand settings store + localStorage persist middleware | `stores/settings.ts` | 浏览器手验 |
+| Step 3 | Settings 纯函数工具（defaults/validation/migration） | `lib/settings.ts` | `settings.test.ts` 4/4 |
+| Step 3 | 全局 SettingsEffect（CSS 变量实时应用） | `components/SettingsEffect.tsx` + `main.tsx` | 浏览器手验 |
+| Step 3 | GeneralSettings 表单绑定 store（保存/取消/恢复默认） | `routes/SettingsPage.tsx` | 浏览器手验 |
 | Step 4 | SettingsPage 布局（左分类菜单 + 右内容卡片） | `routes/SettingsPage.tsx` | 浏览器手验 |
-| Step 5 | GeneralSettings UI 骨架（语言/时区/日期/主题/字体/密度/代码字体/强调色） | `routes/SettingsPage.tsx` | 浏览器手验 |
+| Step 5 | GeneralSettings UI（语言/时区/日期/主题/字体/密度/代码字体/强调色） | `routes/SettingsPage.tsx` | 浏览器手验 |
 | Step 6 | 模型配置/通知/集成/账户占位 | `routes/SettingsPage.tsx` | — |
 
 ---
@@ -38,11 +42,11 @@
 
 - [x] Step 1: 删除 `oh-my-claude-code/` + commit
 - [x] Step 2: 新增 `/settings` 路由 + LeftColumn 导航
-- [ ] Step 3: Zustand settings store + localStorage persist（绑定 GeneralSettings 表单）
+- [x] Step 3: Zustand settings store + localStorage persist（绑定 GeneralSettings 表单）
 - [x] Step 4: SettingsPage 布局（左菜单 + 右内容）
 - [x] Step 5: GeneralSettings UI 骨架
 - [x] Step 6: 模型配置占位 + 其他分类占位
-- [ ] Step 7: 回归测试 + push WHC
+- [ ] Step 7: 回归测试 + push WHC（typecheck + 30/30 已通过，待 push）
 
 ---
 
