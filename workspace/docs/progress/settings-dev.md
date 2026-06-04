@@ -38,6 +38,7 @@
 | Step 8 | UserProfile 类型 + 工具 + 测试 | `lib/user.ts` + `lib/user.test.ts` | 10/10 |
 | Step 8 | User Zustand store（多账户、头像上传、编辑） | `stores/user.ts` | 浏览器手验 |
 | Step 9 | GeneralSettings 丰富化（时区/导出路径/自动保存/启动页/删除确认） | `lib/settings.ts` + `SettingsPage.tsx` | 4/4 |
+| Step 10 | Edge 风格分层级卡片布局（首页卡片 + 面包屑子页面） | `SettingsPage.tsx` + `ProfileSettings.tsx` | 浏览器手验 |
 
 ---
 
