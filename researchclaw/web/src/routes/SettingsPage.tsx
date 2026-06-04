@@ -4,58 +4,136 @@ import { ProfileSettings } from "../components/ProfileSettings";
 import { useSettingsStore } from "../stores/settings";
 import type { AppSettings } from "../lib/settings";
 
-const CATEGORIES = [
-  { id: "profile", label: "个人资料与账户", icon: "👤" },
-  { id: "general", label: "通用", icon: "⚙️" },
-  { id: "appearance", label: "外观", icon: "🎨" },
-  { id: "model", label: "模型", icon: "🖥️" },
-  { id: "notifications", label: "通知", icon: "🔔" },
-  { id: "security", label: "安全", icon: "🔒" },
-  { id: "accessibility", label: "辅助功能", icon: "♿" },
-  { id: "system", label: "系统", icon: "💻" }
-] as const;
+/* ── Category definitions ── */
+
+interface CategoryDef {
+  id: string;
+  label: string;
+  icon: string;
+  description: string;
+}
+
+const CATEGORIES: CategoryDef[] = [
+  { id: "profile", label: "个人资料与账户", icon: "👤", description: "管理头像、昵称、账户切换和登出" },
+  { id: "general", label: "通用", icon: "⚙️", description: "语言、时区、文件路径、自动保存、启动选项" },
+  { id: "appearance", label: "外观", icon: "🎨", description: "主题、字体、密度、代码字体、强调色" },
+  { id: "model", label: "模型", icon: "🖥️", description: "默认模型、Token 限制、工具白名单" },
+  { id: "notifications", label: "通知", icon: "🔔", description: "邮件提醒、浏览器通知、静音时段" },
+  { id: "security", label: "安全", icon: "🔒", description: "API 密钥、双因素认证、会话管理" },
+  { id: "accessibility", label: "辅助功能", icon: "♿", description: "减少动画、高对比度、屏幕阅读器优化" },
+  { id: "system", label: "系统", icon: "💻", description: "版本信息、缓存清理、恢复默认、快捷键" }
+];
 
 type CategoryId = (typeof CATEGORIES)[number]["id"];
 
+/* ── Card component ── */
+
+function CategoryCard({
+  icon,
+  label,
+  description,
+  onClick
+}: {
+  icon: string;
+  label: string;
+  description: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="group flex w-full items-center gap-4 rounded-lg border border-panel-border bg-panel-bg p-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-accent/30 hover:shadow-md"
+    >
+      <span className="text-xl">{icon}</span>
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-medium text-panel-text">{label}</div>
+        <div className="text-xs text-panel-muted">{description}</div>
+      </div>
+      <svg
+        className="h-5 w-5 text-panel-muted transition-colors group-hover:text-accent"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+      </svg>
+    </button>
+  );
+}
+
+/* ── Breadcrumb ── */
+
+function Breadcrumb({ label, onBack }: { label: string; onBack: () => void }) {
+  return (
+    <div className="mb-6 flex items-center gap-2">
+      <button
+        onClick={onBack}
+        className="flex items-center gap-1 rounded p-1 text-sm text-panel-muted hover:bg-panel-bg hover:text-panel-text transition-colors"
+      >
+        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+        </svg>
+        返回
+      </button>
+      <span className="text-panel-muted">/</span>
+      <span className="text-sm font-semibold text-panel-text">{label}</span>
+    </div>
+  );
+}
+
+/* ── Page shell ── */
+
 export function SettingsPage() {
-  const [category, setCategory] = useState<CategoryId>("profile");
+  const [view, setView] = useState<"home" | "detail">("home");
+  const [activeCategory, setActiveCategory] = useState<CategoryId | null>(null);
+
+  const enterCategory = (id: CategoryId) => {
+    setActiveCategory(id);
+    setView("detail");
+  };
+
+  const goHome = () => {
+    setView("home");
+    setActiveCategory(null);
+  };
+
+  const activeDef = CATEGORIES.find((c) => c.id === activeCategory);
 
   return (
     <div className="flex min-h-screen">
       <LeftColumn />
 
-      <main className="flex flex-1 gap-4 overflow-auto p-5">
-        {/* 左侧设置分类菜单 */}
-        <section className="flex w-60 shrink-0 flex-col gap-1">
-          <h1 className="mb-2 text-xl font-semibold text-panel-text">系统设置</h1>
-          {CATEGORIES.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => setCategory(c.id)}
-              className={[
-                "flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm",
-                category === c.id
-                  ? "bg-panel-bg font-medium text-accent"
-                  : "text-panel-text hover:bg-panel-bg/60"
-              ].join(" ")}
-            >
-              <span>{c.icon}</span>
-              {c.label}
-            </button>
-          ))}
-        </section>
-
-        {/* 右侧设置内容区 */}
-        <section className="flex-1 rounded-lg border border-panel-border bg-panel-surface p-5">
-          {category === "general" && <GeneralSettings />}
-          {category === "model" && <PlaceholderSettings title="模型" description="模型选择、Token 限制、工具白名单等配置将在 M2 接入真实 CLI 后开放。" />}
-          {category === "notifications" && <PlaceholderSettings title="通知" />}
-          {category === "profile" && <ProfileSettings />}
-          {category === "appearance" && <AppearanceSettings />}
-          {category === "security" && <PlaceholderSettings title="安全" />}
-          {category === "accessibility" && <AccessibilitySettings />}
-          {category === "system" && <SystemSettings />}
-        </section>
+      <main className="flex-1 overflow-auto p-5">
+        {view === "home" ? (
+          <div className="mx-auto max-w-2xl">
+            <h1 className="mb-6 text-2xl font-semibold text-panel-text">系统设置</h1>
+            <div className="flex flex-col gap-3">
+              {CATEGORIES.map((c) => (
+                <CategoryCard
+                  key={c.id}
+                  icon={c.icon}
+                  label={c.label}
+                  description={c.description}
+                  onClick={() => enterCategory(c.id)}
+                />
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="mx-auto max-w-2xl">
+            {activeDef && <Breadcrumb label={activeDef.label} onBack={goHome} />}
+            <div className="rounded-lg border border-panel-border bg-panel-surface p-5">
+              {activeCategory === "general" && <GeneralSettings />}
+              {activeCategory === "model" && <PlaceholderSettings description="模型选择、Token 限制、工具白名单等配置将在 M2 接入真实 CLI 后开放。" />}
+              {activeCategory === "notifications" && <PlaceholderSettings />}
+              {activeCategory === "profile" && <ProfileSettings />}
+              {activeCategory === "appearance" && <AppearanceSettings />}
+              {activeCategory === "security" && <PlaceholderSettings />}
+              {activeCategory === "accessibility" && <AccessibilitySettings />}
+              {activeCategory === "system" && <SystemSettings />}
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
@@ -218,8 +296,6 @@ function GeneralSettings() {
 
   return (
     <div>
-      <h2 className="mb-4 text-lg font-semibold text-panel-text">通用</h2>
-
       <Section title="语言与区域">
         <Field label="界面语言" description="设置系统界面的显示语言">
           <select
@@ -346,8 +422,6 @@ function AppearanceSettings() {
 
   return (
     <div>
-      <h2 className="mb-4 text-lg font-semibold text-panel-text">外观</h2>
-
       <Section title="主题">
         <Field label="主题模式">
           <div className="flex gap-2">
@@ -471,8 +545,6 @@ function AccessibilitySettings() {
 
   return (
     <div>
-      <h2 className="mb-4 text-lg font-semibold text-panel-text">辅助功能</h2>
-
       <Section title="视觉">
         <ToggleField
           label="减少动画"
@@ -518,15 +590,12 @@ function SystemSettings() {
   const [cleared, setCleared] = useState(false);
 
   const handleClearCache = () => {
-    // Placeholder: real implementation would clear query cache, localStorage, etc.
     setCleared(true);
     setTimeout(() => setCleared(false), 1500);
   };
 
   return (
     <div>
-      <h2 className="mb-4 text-lg font-semibold text-panel-text">系统</h2>
-
       <Section title="关于">
         <Field label="OpenClaw Research" description="版本 v2.1.0">
           <span className="text-sm text-panel-muted">研究助手 · M1 阶段</span>
@@ -584,13 +653,10 @@ function SystemSettings() {
 
 /* ── Placeholder ── */
 
-function PlaceholderSettings({ title, description }: { title: string; description?: string }) {
+function PlaceholderSettings({ description }: { description?: string }) {
   return (
-    <div>
-      <h2 className="mb-4 text-lg font-semibold text-panel-text">{title}</h2>
-      <div className="rounded border border-panel-border bg-panel-bg p-4 text-sm text-panel-muted">
-        {description ?? "该模块将在后续版本开放，当前为占位界面。"}
-      </div>
+    <div className="rounded border border-panel-border bg-panel-bg p-4 text-sm text-panel-muted">
+      {description ?? "该模块将在后续版本开放，当前为占位界面。"}
     </div>
   );
 }

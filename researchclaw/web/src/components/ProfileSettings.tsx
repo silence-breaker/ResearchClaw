@@ -276,7 +276,6 @@ export function ProfileSettings() {
   if (!current) {
     return (
       <div>
-        <h2 className="mb-4 text-lg font-semibold text-panel-text">个人资料与账户</h2>
         <div className="rounded border border-panel-border bg-panel-bg p-4 text-sm text-panel-muted">
           当前没有登录的账户。
           <button
@@ -295,8 +294,6 @@ export function ProfileSettings() {
 
   return (
     <div>
-      <h2 className="mb-4 text-lg font-semibold text-panel-text">个人资料与账户</h2>
-
       {/* Account selector */}
       <AccountDropdown users={users} currentId={currentUserId} onSwitch={switchUser} />
 
