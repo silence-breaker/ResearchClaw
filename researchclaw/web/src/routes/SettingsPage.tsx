@@ -143,8 +143,10 @@ export function SettingsPage() {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="mb-6">
-      <h2 className="mb-3 text-sm font-semibold text-panel-text">{title}</h2>
+    <div className="mb-8">
+      <h2 className="mb-4 text-base font-bold text-panel-text border-l-2 border-accent pl-3">
+        {title}
+      </h2>
       <div className="space-y-4">{children}</div>
     </div>
   );
@@ -162,7 +164,7 @@ function Field({
   return (
     <div className="flex items-start justify-between gap-4">
       <div>
-        <div className="text-sm text-panel-text">{label}</div>
+        <div className="text-sm font-medium text-panel-text">{label}</div>
         {description && <div className="text-xs text-panel-muted">{description}</div>}
       </div>
       <div className="shrink-0">{children}</div>
