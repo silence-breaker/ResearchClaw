@@ -7,9 +7,9 @@
 
 ## 当前状态
 
-**阶段**: Step 6 完成 — 8 分类骨架 + 辅助功能字段已落地
+**阶段**: SecuritySettings 完成 — 全部 8 个一级分类 UI 已落地
 
-**一句话**: 设置页重排为 8 个一级分类（通用/模型/通知/个人资料与账户/外观/安全/辅助功能/系统）；新增 4 个辅助功能字段（减少动画/高对比度/屏幕阅读器优化/焦点指示器）并接入 CSS；外观设置独立为分类；系统分类含版本/缓存清理/恢复默认；typecheck + 30/30 测试通过。
+**一句话**: 设置页 8 个分类全部可用（通用/外观/模型/通知/安全/个人资料与账户/辅助功能/系统）；59/59 测试通过 + typecheck 绿色；外观支持 draft preview 实时预览；模型为 QQ-list 占位 UI；安全包含密码/API 密钥/隐私/2FA 完整表单。
 
 ---
 
@@ -39,6 +39,11 @@
 | Step 8 | User Zustand store（多账户、头像上传、编辑） | `stores/user.ts` | 浏览器手验 |
 | Step 9 | GeneralSettings 丰富化（时区/导出路径/自动保存/启动页/删除确认） | `lib/settings.ts` + `SettingsPage.tsx` | 4/4 |
 | Step 10 | Edge 风格分层级卡片布局（首页卡片 + 面包屑子页面） | `SettingsPage.tsx` + `ProfileSettings.tsx` | 浏览器手验 |
+| Step 11 | AppearanceSettings overhaul（draft preview + 亮度/夜间模式/背景色/字体） | `SettingsPage.tsx` + `SettingsEffect.tsx` | 浏览器手验 |
+| Step 12 | ModelSettings QQ-list UI + demo data + M2 API stubs | `components/ModelSettings.tsx` + `lib/model.ts` | `model.test.ts` 7/7 |
+| Step 13 | NotificationSettings（消息/声音/弹窗/邮件 + 频率/免打扰） | `components/NotificationSettings.tsx` + `lib/notification.ts` | 浏览器手验 |
+| Step 14 | SecuritySettings（密码修改/API 密钥/隐私/2FA） | `components/SecuritySettings.tsx` + `lib/security.ts` + `stores/security.ts` | `security.test.ts` 8/8 |
+| Step 14 | 移除未使用的 PlaceholderSettings，修复 password validator 大写检查 | `routes/SettingsPage.tsx` + `lib/security.ts` | typecheck + 59/59 |
 
 ---
 
@@ -50,6 +55,8 @@
 
 ## 待开始
 
+全部完成。当前 8 个一级分类 UI 均已落地，等待后续 M2/M3 后端接口对接。
+
 - [x] Step 1: 删除 `oh-my-claude-code/` + commit
 - [x] Step 2: 新增 `/settings` 路由 + LeftColumn 导航
 - [x] Step 3: Zustand settings store + localStorage persist（绑定 GeneralSettings 表单）
@@ -57,6 +64,13 @@
 - [x] Step 5: GeneralSettings UI 骨架
 - [x] Step 6: 模型配置占位 + 其他分类占位
 - [x] Step 7: 8 分类重构 + 辅助功能字段 + push WHC
+- [x] Step 8: 个人资料与账户完整 UI
+- [x] Step 9: GeneralSettings 丰富化
+- [x] Step 10: Edge 风格分层级卡片布局
+- [x] Step 11: AppearanceSettings overhaul + draft preview
+- [x] Step 12: ModelSettings QQ-list UI + M2 stubs
+- [x] Step 13: NotificationSettings 完整 UI
+- [x] Step 14: SecuritySettings 完整 UI + 清理
 
 ---
 
@@ -64,9 +78,11 @@
 
 | 风险 | 状态 | 应对方案 |
 |------|------|---------|
-| oh-my-claude-code 删除后他人环境 | 待处理 | commit message 明确说明 |
+| oh-my-claude-code 删除后他人环境 | 已处理 | commit `a06dd0b` 明确说明 |
 | light 主题全面回归测试成本高 | 延后 | Phase 1 只做 dark + system 骨架 |
-| 模型配置无后端接口 | 占位 | dropdown disabled，标注 M2 接入 |
+| 模型配置无后端接口 | 占位 | QQ-list UI + `lib/model.ts` M2 API stubs |
+| SecuritySettings 无后端接口 | 占位 | Zustand localStorage 持久化，标注 M3 API |
+| 密码/密钥等敏感数据 | 进行中 | 前端仅 masked 展示，真实加密等 M3 后端 |
 
 ---
 

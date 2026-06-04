@@ -4,6 +4,7 @@ import {
   clampFontSize,
   clampBrightness,
   clampVolume,
+  clampLineHeight,
   isValidHexColor,
   migrateSettings,
   type AppSettings
@@ -34,6 +35,17 @@ describe("clampVolume", () => {
     expect(clampVolume(50)).toBe(50);
     expect(clampVolume(100)).toBe(100);
     expect(clampVolume(150)).toBe(100);
+  });
+});
+
+describe("clampLineHeight", () => {
+  test("clamps to [1.2, 2.0] with 1 decimal", () => {
+    expect(clampLineHeight(1.0)).toBe(1.2);
+    expect(clampLineHeight(1.2)).toBe(1.2);
+    expect(clampLineHeight(1.55)).toBe(1.6);
+    expect(clampLineHeight(1.6)).toBe(1.6);
+    expect(clampLineHeight(2.0)).toBe(2.0);
+    expect(clampLineHeight(2.5)).toBe(2.0);
   });
 });
 
@@ -99,5 +111,22 @@ describe("migrateSettings", () => {
     expect(out.notificationFrequency).toBe(DEFAULT_SETTINGS.notificationFrequency);
     expect(out.quietHoursStart).toBe(DEFAULT_SETTINGS.quietHoursStart);
     expect(out.doNotDisturb).toBe(DEFAULT_SETTINGS.doNotDisturb);
+  });
+
+  test("keeps accessibility fields", () => {
+    const input: Partial<AppSettings> = {
+      reduceTransparency: true,
+      lineHeight: 1.8
+    };
+    const out = migrateSettings(input);
+    expect(out.reduceTransparency).toBe(true);
+    expect(out.lineHeight).toBe(1.8);
+  });
+
+  test("reverts invalid accessibility fields", () => {
+    const input = { reduceTransparency: "yes", lineHeight: 3.0 };
+    const out = migrateSettings(input);
+    expect(out.reduceTransparency).toBe(DEFAULT_SETTINGS.reduceTransparency);
+    expect(out.lineHeight).toBe(2.0);
   });
 });

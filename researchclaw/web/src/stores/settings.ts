@@ -27,7 +27,7 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: STORAGE_KEY,
-      version: 1,
+      version: 2,
       partialize: (state) => ({ settings: state.settings }),
       migrate: (persistedState) => {
         if (!persistedState || typeof persistedState !== "object") {

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { LeftColumn } from "../components/LeftColumn";
 import { ProfileSettings } from "../components/ProfileSettings";
 import { ModelSettings } from "../components/ModelSettings";
+import { SecuritySettings } from "../components/SecuritySettings";
 import { useSettingsStore } from "../stores/settings";
 import { FONT_FAMILY_OPTIONS, type AppSettings } from "../lib/settings";
 
@@ -129,7 +130,7 @@ export function SettingsPage() {
               {activeCategory === "notifications" && <NotificationSettings />}
               {activeCategory === "profile" && <ProfileSettings />}
               {activeCategory === "appearance" && <AppearanceSettings />}
-              {activeCategory === "security" && <PlaceholderSettings />}
+              {activeCategory === "security" && <SecuritySettings />}
               {activeCategory === "accessibility" && <AccessibilitySettings />}
               {activeCategory === "system" && <SystemSettings />}
             </div>
@@ -630,6 +631,23 @@ function AccessibilitySettings() {
           checked={draft.focusIndicator}
           onChange={(v) => patch({ focusIndicator: v })}
         />
+        <ToggleField
+          label="减少透明度"
+          description="关闭毛玻璃和半透明效果，提升可读性"
+          checked={draft.reduceTransparency}
+          onChange={(v) => patch({ reduceTransparency: v })}
+        />
+        <Field label="行高" description={`当前: ${(draft.lineHeight ?? 1.6).toFixed(1)}`}>
+          <input
+            type="range"
+            min={1.2}
+            max={2.0}
+            step={0.1}
+            value={draft.lineHeight}
+            onChange={(e) => patch({ lineHeight: Number(e.target.value) })}
+            className="w-32 accent-accent"
+          />
+        </Field>
       </Section>
 
       <SaveBar
@@ -847,12 +865,3 @@ function SystemSettings() {
   );
 }
 
-/* ── Placeholder ── */
-
-function PlaceholderSettings({ description }: { description?: string }) {
-  return (
-    <div className="rounded border border-panel-border bg-panel-bg p-4 text-sm text-panel-muted">
-      {description ?? "该模块将在后续版本开放，当前为占位界面。"}
-    </div>
-  );
-}

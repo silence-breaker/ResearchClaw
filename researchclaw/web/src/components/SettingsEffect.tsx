@@ -42,11 +42,13 @@ export function SettingsEffect() {
 
     const densityMap = { compact: "0.75", comfortable: "1", spacious: "1.25" };
     root.style.setProperty("--rc-density", densityMap[effective.density] ?? "1");
+    root.style.setProperty("--rc-line-height", String(effective.lineHeight));
 
     root.classList.toggle("rc-reduce-motion", effective.reduceMotion);
     root.classList.toggle("rc-high-contrast", effective.highContrast);
     root.classList.toggle("rc-screen-reader", effective.screenReaderOptimized);
     root.classList.toggle("rc-focus-indicator", effective.focusIndicator);
+    root.classList.toggle("rc-reduce-transparency", effective.reduceTransparency);
     root.classList.toggle("rc-night-mode", effective.nightMode);
   }, [effective]);
 

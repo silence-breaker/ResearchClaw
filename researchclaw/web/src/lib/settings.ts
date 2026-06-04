@@ -52,6 +52,8 @@ export interface AppSettings {
   highContrast: boolean;
   screenReaderOptimized: boolean;
   focusIndicator: boolean;
+  reduceTransparency: boolean;
+  lineHeight: number;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -88,7 +90,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   reduceMotion: false,
   highContrast: false,
   screenReaderOptimized: false,
-  focusIndicator: false
+  focusIndicator: false,
+  reduceTransparency: false,
+  lineHeight: 1.6
 };
 
 export const VALID_THEMES: ThemeMode[] = ["dark", "light", "system"];
@@ -106,6 +110,8 @@ export const BRIGHTNESS_MIN = 50;
 export const BRIGHTNESS_MAX = 150;
 export const VOLUME_MIN = 0;
 export const VOLUME_MAX = 100;
+export const LINE_HEIGHT_MIN = 1.2;
+export const LINE_HEIGHT_MAX = 2.0;
 
 export function clampFontSize(n: number): number {
   return Math.max(FONT_SIZE_MIN, Math.min(FONT_SIZE_MAX, Math.round(n)));
@@ -117,6 +123,11 @@ export function clampBrightness(n: number): number {
 
 export function clampVolume(n: number): number {
   return Math.max(VOLUME_MIN, Math.min(VOLUME_MAX, Math.round(n)));
+}
+
+export function clampLineHeight(n: number): number {
+  const clamped = Math.max(LINE_HEIGHT_MIN, Math.min(LINE_HEIGHT_MAX, n));
+  return Math.round(clamped * 10) / 10;
 }
 
 export function isValidAccentColor(c: string): c is AccentColor {
@@ -210,7 +221,14 @@ export function migrateSettings(raw: unknown): AppSettings {
         ? partial.screenReaderOptimized
         : DEFAULT_SETTINGS.screenReaderOptimized,
     focusIndicator:
-      typeof partial.focusIndicator === "boolean" ? partial.focusIndicator : DEFAULT_SETTINGS.focusIndicator
+      typeof partial.focusIndicator === "boolean" ? partial.focusIndicator : DEFAULT_SETTINGS.focusIndicator,
+    reduceTransparency:
+      typeof partial.reduceTransparency === "boolean"
+        ? partial.reduceTransparency
+        : DEFAULT_SETTINGS.reduceTransparency,
+    lineHeight: clampLineHeight(
+      typeof partial.lineHeight === "number" ? partial.lineHeight : DEFAULT_SETTINGS.lineHeight
+    )
   };
 }
 
