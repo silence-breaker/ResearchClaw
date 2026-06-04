@@ -7,9 +7,9 @@
 
 ## 当前状态
 
-**阶段**: Step 0 — 前置清理（未开始）
+**阶段**: Step 1 完成 — 前置清理已完成
 
-**一句话**: Plan 已就绪，等待确认后开始执行。
+**一句话**: oh-my-claude-code 已删除并提交；plan 与进度文档已放入 workspace/docs/progress/。
 
 ---
 
@@ -17,7 +17,9 @@
 
 | 步骤 | 内容 | 文件 | 测试 |
 |------|------|------|------|
-| Plan | 完成 Settings 界面开发 Plan | `docs/progress/settings-plan.md` | — |
+| Plan | 完成 Settings 界面开发 Plan | `workspace/docs/progress/settings-plan.md` | — |
+| Step 1 | 删除 oh-my-claude-code/ (~20MB, 1470 files) | `.gitignore` | — |
+| Step 1 | 将 plan/进度文档移入 workspace 避免污染 | `workspace/docs/progress/settings-dev.md` | — |
 
 ---
 
@@ -29,7 +31,7 @@
 
 ## 待开始
 
-- [ ] Step 1: 删除 `oh-my-claude-code/` + commit
+- [x] Step 1: 删除 `oh-my-claude-code/` + commit
 - [ ] Step 2: 新增 `/settings` 路由 + LeftColumn 导航
 - [ ] Step 3: Zustand settings store + localStorage persist
 - [ ] Step 4: SettingsPage 布局（左菜单 + 右内容）
