@@ -177,6 +177,29 @@ function SaveBar({
 
 /* ── Category: General ── */
 
+const TIMEZONES = [
+  { value: "Asia/Shanghai", label: "(UTC+8) 北京，上海，香港，台北" },
+  { value: "Asia/Tokyo", label: "(UTC+9) 东京，首尔" },
+  { value: "Europe/London", label: "(UTC+0) 伦敦" },
+  { value: "Europe/Paris", label: "(UTC+1) 巴黎，柏林" },
+  { value: "America/New_York", label: "(UTC-5) 纽约" },
+  { value: "America/Los_Angeles", label: "(UTC-8) 洛杉矶" },
+  { value: "Australia/Sydney", label: "(UTC+10) 悉尼" }
+];
+
+const AUTO_SAVE_OPTIONS: { value: AppSettings["autoSaveInterval"]; label: string }[] = [
+  { value: "off", label: "关闭" },
+  { value: "30s", label: "30 秒" },
+  { value: "1m", label: "1 分钟" },
+  { value: "5m", label: "5 分钟" }
+];
+
+const STARTUP_OPTIONS: { value: AppSettings["startupPage"]; label: string }[] = [
+  { value: "projects", label: "项目列表" },
+  { value: "last", label: "继续上次" },
+  { value: "blank", label: "空白工作台" }
+];
+
 function GeneralSettings() {
   const { settings, update, reset } = useSettingsStore();
   const [draft, setDraft] = useState<AppSettings>(settings);
@@ -210,10 +233,15 @@ function GeneralSettings() {
         </Field>
         <Field label="时区" description="所有时间戳将按此时区显示">
           <select
-            disabled
-            className="cursor-not-allowed rounded border border-panel-border bg-panel-bg px-3 py-1.5 text-sm text-panel-muted/70"
+            value={draft.timezone}
+            onChange={(e) => patch({ timezone: e.target.value })}
+            className="rounded border border-panel-border bg-panel-bg px-3 py-1.5 text-sm text-panel-text outline-none focus:border-accent"
           >
-            <option>(UTC+8) 北京，上海，香港，台北</option>
+            {TIMEZONES.map((tz) => (
+              <option key={tz.value} value={tz.value}>
+                {tz.label}
+              </option>
+            ))}
           </select>
         </Field>
         <Field label="日期格式">
@@ -233,6 +261,58 @@ function GeneralSettings() {
             ))}
           </div>
         </Field>
+      </Section>
+
+      <Section title="文件与导出">
+        <Field label="默认导出路径" description="研究报告和资料的默认保存位置">
+          <input
+            type="text"
+            value={draft.defaultExportPath}
+            onChange={(e) => patch({ defaultExportPath: e.target.value })}
+            className="w-64 rounded border border-panel-border bg-panel-bg px-3 py-1.5 text-sm text-panel-text outline-none focus:border-accent"
+            placeholder="~/ResearchClaw/Exports"
+          />
+        </Field>
+        <Field label="自动保存间隔" description="研究项目自动保存的频率">
+          <div className="flex gap-2 text-xs">
+            {AUTO_SAVE_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => patch({ autoSaveInterval: opt.value })}
+                className={[
+                  "rounded border px-2.5 py-1.5",
+                  draft.autoSaveInterval === opt.value
+                    ? "border-accent bg-accent/10 text-accent"
+                    : "border-panel-border bg-panel-bg text-panel-text hover:border-accent"
+                ].join(" ")}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </Field>
+      </Section>
+
+      <Section title="启动与行为">
+        <Field label="启动页面" description="打开应用时默认显示的页面">
+          <select
+            value={draft.startupPage}
+            onChange={(e) => patch({ startupPage: e.target.value as AppSettings["startupPage"] })}
+            className="rounded border border-panel-border bg-panel-bg px-3 py-1.5 text-sm text-panel-text outline-none focus:border-accent"
+          >
+            {STARTUP_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <ToggleField
+          label="删除前确认"
+          description="删除项目或数据前显示确认对话框"
+          checked={draft.confirmBeforeDelete}
+          onChange={(v) => patch({ confirmBeforeDelete: v })}
+        />
       </Section>
 
       <SaveBar

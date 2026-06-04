@@ -30,7 +30,12 @@ describe("migrateSettings", () => {
       fontSize: 16,
       accentColor: "pink",
       reduceMotion: true,
-      highContrast: true
+      highContrast: true,
+      timezone: "America/New_York",
+      defaultExportPath: "/custom/path",
+      autoSaveInterval: "5m",
+      startupPage: "last",
+      confirmBeforeDelete: false
     };
     const out = migrateSettings(input);
     expect(out.theme).toBe("system");
@@ -39,6 +44,11 @@ describe("migrateSettings", () => {
     expect(out.accentColor).toBe("pink");
     expect(out.reduceMotion).toBe(true);
     expect(out.highContrast).toBe(true);
+    expect(out.timezone).toBe("America/New_York");
+    expect(out.defaultExportPath).toBe("/custom/path");
+    expect(out.autoSaveInterval).toBe("5m");
+    expect(out.startupPage).toBe("last");
+    expect(out.confirmBeforeDelete).toBe(false);
     // unset fields fall back to defaults
     expect(out.dateFormat).toBe(DEFAULT_SETTINGS.dateFormat);
     expect(out.density).toBe(DEFAULT_SETTINGS.density);
@@ -58,7 +68,12 @@ describe("migrateSettings", () => {
       reduceMotion: "yes",
       highContrast: 1,
       screenReaderOptimized: null,
-      focusIndicator: undefined
+      focusIndicator: undefined,
+      timezone: 123,
+      defaultExportPath: null,
+      autoSaveInterval: "10m",
+      startupPage: "home",
+      confirmBeforeDelete: "no"
     };
     const out = migrateSettings(input);
     expect(out.theme).toBe(DEFAULT_SETTINGS.theme);
@@ -71,6 +86,11 @@ describe("migrateSettings", () => {
     expect(out.highContrast).toBe(DEFAULT_SETTINGS.highContrast);
     expect(out.screenReaderOptimized).toBe(DEFAULT_SETTINGS.screenReaderOptimized);
     expect(out.focusIndicator).toBe(DEFAULT_SETTINGS.focusIndicator);
+    expect(out.timezone).toBe(DEFAULT_SETTINGS.timezone);
+    expect(out.defaultExportPath).toBe(DEFAULT_SETTINGS.defaultExportPath);
+    expect(out.autoSaveInterval).toBe(DEFAULT_SETTINGS.autoSaveInterval);
+    expect(out.startupPage).toBe(DEFAULT_SETTINGS.startupPage);
+    expect(out.confirmBeforeDelete).toBe(DEFAULT_SETTINGS.confirmBeforeDelete);
     // fontSize is clamped, not reset to default
     expect(out.fontSize).toBe(18);
   });

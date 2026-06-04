@@ -7,11 +7,18 @@ export type DateFormat = "YYYY-MM-DD" | "MM/DD/YYYY" | "DD/MM/YYYY";
 export type Density = "compact" | "comfortable" | "spacious";
 export type AccentColor = "blue" | "cyan" | "pink" | "orange" | "green";
 export type CodeFont = "JetBrains Mono" | "Fira Code" | "SF Mono";
+export type AutoSaveInterval = "off" | "30s" | "1m" | "5m";
+export type StartupPage = "projects" | "last" | "blank";
 
 export interface AppSettings {
   // ── General ──
   language: Language;
+  timezone: string;
   dateFormat: DateFormat;
+  defaultExportPath: string;
+  autoSaveInterval: AutoSaveInterval;
+  startupPage: StartupPage;
+  confirmBeforeDelete: boolean;
 
   // ── Appearance ──
   theme: ThemeMode;
@@ -29,7 +36,12 @@ export interface AppSettings {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   language: "zh-CN",
+  timezone: "Asia/Shanghai",
   dateFormat: "YYYY-MM-DD",
+  defaultExportPath: "~/ResearchClaw/Exports",
+  autoSaveInterval: "1m",
+  startupPage: "projects",
+  confirmBeforeDelete: true,
   theme: "dark",
   fontSize: 14,
   density: "comfortable",
@@ -47,6 +59,8 @@ export const VALID_DATE_FORMATS: DateFormat[] = ["YYYY-MM-DD", "MM/DD/YYYY", "DD
 export const VALID_DENSITIES: Density[] = ["compact", "comfortable", "spacious"];
 export const VALID_ACCENT_COLORS: AccentColor[] = ["blue", "cyan", "pink", "orange", "green"];
 export const VALID_CODE_FONTS: CodeFont[] = ["JetBrains Mono", "Fira Code", "SF Mono"];
+export const VALID_AUTO_SAVE_INTERVALS: AutoSaveInterval[] = ["off", "30s", "1m", "5m"];
+export const VALID_STARTUP_PAGES: StartupPage[] = ["projects", "last", "blank"];
 
 export const FONT_SIZE_MIN = 12;
 export const FONT_SIZE_MAX = 18;
@@ -72,9 +86,24 @@ export function migrateSettings(raw: unknown): AppSettings {
     language: VALID_LANGUAGES.includes(partial.language as Language)
       ? (partial.language as Language)
       : DEFAULT_SETTINGS.language,
+    timezone: typeof partial.timezone === "string" ? partial.timezone : DEFAULT_SETTINGS.timezone,
     dateFormat: VALID_DATE_FORMATS.includes(partial.dateFormat as DateFormat)
       ? (partial.dateFormat as DateFormat)
       : DEFAULT_SETTINGS.dateFormat,
+    defaultExportPath:
+      typeof partial.defaultExportPath === "string"
+        ? partial.defaultExportPath
+        : DEFAULT_SETTINGS.defaultExportPath,
+    autoSaveInterval: VALID_AUTO_SAVE_INTERVALS.includes(partial.autoSaveInterval as AutoSaveInterval)
+      ? (partial.autoSaveInterval as AutoSaveInterval)
+      : DEFAULT_SETTINGS.autoSaveInterval,
+    startupPage: VALID_STARTUP_PAGES.includes(partial.startupPage as StartupPage)
+      ? (partial.startupPage as StartupPage)
+      : DEFAULT_SETTINGS.startupPage,
+    confirmBeforeDelete:
+      typeof partial.confirmBeforeDelete === "boolean"
+        ? partial.confirmBeforeDelete
+        : DEFAULT_SETTINGS.confirmBeforeDelete,
     theme: VALID_THEMES.includes(partial.theme as ThemeMode) ? (partial.theme as ThemeMode) : DEFAULT_SETTINGS.theme,
     fontSize: clampFontSize(typeof partial.fontSize === "number" ? partial.fontSize : DEFAULT_SETTINGS.fontSize),
     density: VALID_DENSITIES.includes(partial.density as Density)
