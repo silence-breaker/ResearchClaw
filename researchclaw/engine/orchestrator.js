@@ -498,6 +498,24 @@ export class ResearchOrchestrator {
     }));
   }
 
+  // Read-only evidence preview: runs claimEvidenceGate against the current
+  // stored artifacts so the panel can show live claim->evidence coverage before
+  // the summary phase exists. Never writes state or emits events.
+  async previewEvidence(projectId) {
+    const state = this.store.readState(projectId);
+    if (!state.current?.contract_artifact_ref) {
+      return { ok: true, ready: false, evidence_index: [], reason: "contract not approved" };
+    }
+    const { contract } = this.getContract(state);
+    const check = claimEvidenceGate(contract, {
+      availableArtifacts: this.availableArtifacts(state),
+      completedPhases: state.phase_history
+        .filter((entry) => entry.gate_result === "pass")
+        .map((entry) => entry.phase)
+    });
+    return { ok: true, ready: true, gate_ok: check.ok, evidence_index: check.evidence_index };
+  }
+
   getContract(state) {
     const ref = state.current.contract_artifact_ref;
     if (!ref) {

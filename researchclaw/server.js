@@ -106,6 +106,13 @@ export function createResearchServer({ store, orchestrator, eventBus = null, web
       return;
     }
 
+    const evidenceMatch = url.pathname.match(/^\/projects\/([^/]+)\/evidence$/);
+    if (req.method === "GET" && evidenceMatch) {
+      const result = await orchestrator.previewEvidence(evidenceMatch[1]);
+      sendJson(res, 200, result);
+      return;
+    }
+
     const artifactMatch = url.pathname.match(/^\/projects\/([^/]+)\/artifact$/);
     if (req.method === "GET" && artifactMatch) {
       const ref = url.searchParams.get("ref");

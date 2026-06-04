@@ -114,6 +114,38 @@ test("summary evidence_index is computed from the contract claim map", async () 
   assert.ok(Array.isArray(c1.satisfied));
 });
 
+test("previewEvidence returns ready:false before any contract exists", async () => {
+  const { orchestrator } = createTempHarness();
+  const preview = await orchestrator.previewEvidence("proj_fresh");
+  assert.equal(preview.ok, true);
+  assert.equal(preview.ready, false);
+  assert.deepEqual(preview.evidence_index, []);
+});
+
+test("previewEvidence computes real satisfied/pending claims mid-pipeline", async () => {
+  const { store, orchestrator } = createTempHarness();
+  const payload = readJsonUrl(new URL("../../fixtures/openclaw/keyword-detector.json", import.meta.url));
+  await handleOpenClawPayload({ payload, store, orchestrator });
+  const stateBefore = store.readState("proj_demo_001");
+  await orchestrator.approve("proj_demo_001", {
+    target: "contract",
+    artifact_id: stateBefore.current.contract_artifact_id,
+    approved_by: "human"
+  });
+  await orchestrator.advance("proj_demo_001"); // literature scouting -> paper_cards artifact
+  await orchestrator.advance("proj_demo_001"); // baseline selection -> baseline_decision artifact
+
+  const preview = await orchestrator.previewEvidence("proj_demo_001");
+  assert.equal(preview.ready, true);
+  assert.ok(preview.evidence_index.length > 0, "evidence_index must carry the contract claims");
+  // Real claimEvidenceGate output: some claim is satisfied by a stored artifact ref,
+  // and at least one demo-scope claim is still pending (e.g. experiment results).
+  const allSatisfied = preview.evidence_index.flatMap((entry) => entry.satisfied);
+  const allPending = preview.evidence_index.flatMap((entry) => entry.pending);
+  assert.ok(allSatisfied.some((item) => typeof item.artifact_ref === "string" && item.artifact_ref.length > 0));
+  assert.ok(allPending.some((item) => typeof item.reason === "string" && item.reason.length > 0));
+});
+
 test("baseline gate failure blocks the pipeline", async () => {
   const rootDir = createTempHarness(new BadBaselineAdapter()).rootDir;
   const store = new FileEvidenceStore({ rootDir });

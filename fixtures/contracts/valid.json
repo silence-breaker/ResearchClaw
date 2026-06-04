@@ -80,6 +80,41 @@
         "same-split comparison",
         "main metric table"
       ]
+    },
+    {
+      "claim_id": "C2",
+      "claim": "Prior literature supports the research direction.",
+      "required_evidence": [
+        "literature survey"
+      ]
+    },
+    {
+      "claim_id": "C3",
+      "claim": "A reproducible open-source baseline has been selected.",
+      "required_evidence": [
+        "selected baseline"
+      ]
+    },
+    {
+      "claim_id": "C4",
+      "claim": "The baseline can be reproduced from a concrete checklist.",
+      "required_evidence": [
+        "reproduction checklist"
+      ]
+    },
+    {
+      "claim_id": "C5",
+      "claim": "Concrete research ideas extend the selected baseline.",
+      "required_evidence": [
+        "idea proposal"
+      ]
+    },
+    {
+      "claim_id": "C6",
+      "claim": "Candidate ideas are vetted for novelty and feasibility.",
+      "required_evidence": [
+        "novelty assessment"
+      ]
     }
   ],
   "created_at": "2026-05-31T00:00:00.000Z",

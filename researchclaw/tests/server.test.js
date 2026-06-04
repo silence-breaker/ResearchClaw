@@ -101,6 +101,52 @@ test("POST /recover on a non-blocked project returns an error", async () => {
   }
 });
 
+async function getJson(baseUrl, path) {
+  const res = await fetch(`${baseUrl}${path}`, { headers: { Accept: "application/json" } });
+  return { status: res.status, body: await res.json() };
+}
+
+test("GET /evidence returns ready:false before a contract is approved", async () => {
+  const server = await startTestServer();
+  try {
+    const result = await getJson(server.baseUrl, "/projects/proj_none/evidence");
+    assert.equal(result.status, 200);
+    assert.equal(result.body.ok, true);
+    assert.equal(result.body.ready, false);
+    assert.deepEqual(result.body.evidence_index, []);
+  } finally {
+    await server.close();
+  }
+});
+
+test("GET /evidence returns real claim->artifact mapping mid-pipeline", async () => {
+  const server = await startTestServer();
+  try {
+    const projectId = "proj_evidence";
+    await postJson(server.baseUrl, `/projects/${projectId}/start`, {
+      research_direction: "Explore retrieval reranking"
+    });
+    const state = server.store.readState(projectId);
+    await postJson(server.baseUrl, `/projects/${projectId}/approve`, {
+      target: "contract",
+      artifact_id: state.current.contract_artifact_id,
+      approved_by: "human"
+    });
+    await postJson(server.baseUrl, `/projects/${projectId}/advance`); // literature scouting
+    await postJson(server.baseUrl, `/projects/${projectId}/advance`); // baseline selection
+
+    const result = await getJson(server.baseUrl, `/projects/${projectId}/evidence`);
+    assert.equal(result.status, 200);
+    assert.equal(result.body.ready, true);
+    assert.ok(Array.isArray(result.body.evidence_index));
+    assert.ok(result.body.evidence_index.length > 0);
+    const entry = result.body.evidence_index[0];
+    assert.ok("claim_id" in entry && "satisfied" in entry && "pending" in entry);
+  } finally {
+    await server.close();
+  }
+});
+
 function parseSseFrame(frame) {
   let eventName = "message";
   const dataLines = [];

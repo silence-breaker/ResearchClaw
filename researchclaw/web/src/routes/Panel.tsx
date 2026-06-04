@@ -3,6 +3,7 @@ import { useProjectStream } from "../api/useProjectStream";
 import { LeftColumn } from "../components/LeftColumn";
 import { CenterColumn } from "../components/CenterColumn";
 import { RightColumn } from "../components/RightColumn";
+import { ArtifactDetailDrawer } from "../components/ArtifactDetailDrawer";
 
 export function Panel() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -21,6 +22,7 @@ export function Panel() {
       <LeftColumn state={state} status={status} />
       <CenterColumn state={state} />
       <RightColumn state={state} />
+      {projectId && <ArtifactDetailDrawer projectId={projectId} />}
     </div>
   );
 }

@@ -4,14 +4,17 @@ import { ActionBar } from "./ActionBar";
 import { MetricsRow } from "./MetricsRow";
 import { PipelineProgress } from "./PipelineProgress";
 import { ContractTab } from "./ContractTab";
+import { PhaseStatusTab } from "./PhaseStatusTab";
+import { EvidenceMapTab } from "./EvidenceMapTab";
+import { ChangeHistoryTab } from "./ChangeHistoryTab";
 
 type TabId = "contract" | "phase_status" | "evidence_map" | "change_history";
 
-const TABS: { id: TabId; label: string; ready: boolean }[] = [
-  { id: "contract", label: "研究契约", ready: true },
-  { id: "phase_status", label: "阶段状态", ready: false },
-  { id: "evidence_map", label: "证据映射", ready: false },
-  { id: "change_history", label: "变更历史", ready: false }
+const TABS: { id: TabId; label: string }[] = [
+  { id: "contract", label: "研究契约" },
+  { id: "phase_status", label: "阶段状态" },
+  { id: "evidence_map", label: "证据映射" },
+  { id: "change_history", label: "变更历史" }
 ];
 
 export function CenterColumn({ state }: { state: ProjectState }) {
@@ -35,26 +38,21 @@ export function CenterColumn({ state }: { state: ProjectState }) {
           {TABS.map((t) => (
             <button
               key={t.id}
-              onClick={() => t.ready && setTab(t.id)}
-              disabled={!t.ready}
+              onClick={() => setTab(t.id)}
               className={[
-                "px-3 py-2 text-sm",
-                tab === t.id ? "border-b-2 border-accent text-accent" : "text-panel-muted",
-                t.ready ? "hover:text-panel-text" : "cursor-not-allowed opacity-50"
+                "px-3 py-2 text-sm hover:text-panel-text",
+                tab === t.id ? "border-b-2 border-accent text-accent" : "text-panel-muted"
               ].join(" ")}
-              title={t.ready ? undefined : "M1.4 接入"}
             >
               {t.label}
-              {!t.ready && <span className="ml-1 text-[10px]">·M1.4</span>}
             </button>
           ))}
         </div>
         <div className="p-4">
-          {tab === "contract" ? (
-            <ContractTab state={state} />
-          ) : (
-            <p className="text-sm text-panel-muted">该 Tab 将在 M1.4 接入真实数据。</p>
-          )}
+          {tab === "contract" && <ContractTab state={state} />}
+          {tab === "phase_status" && <PhaseStatusTab state={state} />}
+          {tab === "evidence_map" && <EvidenceMapTab state={state} />}
+          {tab === "change_history" && <ChangeHistoryTab state={state} />}
         </div>
       </section>
     </main>

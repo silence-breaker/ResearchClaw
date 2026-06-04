@@ -125,6 +125,15 @@ export interface EvidenceIndexEntry {
   pending: { evidence: string; reason: string }[];
 }
 
+// Read-only preview from GET /projects/:id/evidence — live claimEvidenceGate
+// output. ready:false before a contract exists (nothing to map yet).
+export interface EvidencePreview {
+  ready: boolean;
+  gate_ok?: boolean;
+  evidence_index: EvidenceIndexEntry[];
+  reason?: string;
+}
+
 // A success criterion / failure signal entry (backend shape, not a bare string).
 export interface ContractCriterion {
   id: string;

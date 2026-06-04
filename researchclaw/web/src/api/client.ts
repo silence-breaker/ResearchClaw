@@ -1,4 +1,4 @@
-import type { Artifact, ProjectState, ProjectSummary } from "./types";
+import type { Artifact, EvidencePreview, ProjectState, ProjectSummary } from "./types";
 
 async function getJson<T>(path: string): Promise<T> {
   const res = await fetch(path, { headers: { Accept: "application/json" } });
@@ -23,6 +23,11 @@ export async function fetchArtifact(projectId: string, ref: string): Promise<Art
     `/projects/${projectId}/artifact?ref=${encodeURIComponent(ref)}`
   );
   return body.artifact;
+}
+
+// Live evidence map (claimEvidenceGate over current artifacts). Read-only.
+export async function fetchEvidence(projectId: string): Promise<EvidencePreview> {
+  return getJson<EvidencePreview>(`/projects/${projectId}/evidence`);
 }
 
 // --- mutations -------------------------------------------------------------
