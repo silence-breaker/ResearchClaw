@@ -28,16 +28,22 @@ describe("migrateSettings", () => {
       theme: "system",
       language: "en",
       fontSize: 16,
-      accentColor: "pink"
+      accentColor: "pink",
+      reduceMotion: true,
+      highContrast: true
     };
     const out = migrateSettings(input);
     expect(out.theme).toBe("system");
     expect(out.language).toBe("en");
     expect(out.fontSize).toBe(16);
     expect(out.accentColor).toBe("pink");
+    expect(out.reduceMotion).toBe(true);
+    expect(out.highContrast).toBe(true);
     // unset fields fall back to defaults
     expect(out.dateFormat).toBe(DEFAULT_SETTINGS.dateFormat);
     expect(out.density).toBe(DEFAULT_SETTINGS.density);
+    expect(out.screenReaderOptimized).toBe(DEFAULT_SETTINGS.screenReaderOptimized);
+    expect(out.focusIndicator).toBe(DEFAULT_SETTINGS.focusIndicator);
   });
 
   test("reverts invalid enum fields to defaults and clamps font size", () => {
@@ -48,7 +54,11 @@ describe("migrateSettings", () => {
       fontSize: 99,
       density: "huge",
       codeFont: "Comic Sans",
-      accentColor: "red"
+      accentColor: "red",
+      reduceMotion: "yes",
+      highContrast: 1,
+      screenReaderOptimized: null,
+      focusIndicator: undefined
     };
     const out = migrateSettings(input);
     expect(out.theme).toBe(DEFAULT_SETTINGS.theme);
@@ -57,6 +67,10 @@ describe("migrateSettings", () => {
     expect(out.density).toBe(DEFAULT_SETTINGS.density);
     expect(out.codeFont).toBe(DEFAULT_SETTINGS.codeFont);
     expect(out.accentColor).toBe(DEFAULT_SETTINGS.accentColor);
+    expect(out.reduceMotion).toBe(DEFAULT_SETTINGS.reduceMotion);
+    expect(out.highContrast).toBe(DEFAULT_SETTINGS.highContrast);
+    expect(out.screenReaderOptimized).toBe(DEFAULT_SETTINGS.screenReaderOptimized);
+    expect(out.focusIndicator).toBe(DEFAULT_SETTINGS.focusIndicator);
     // fontSize is clamped, not reset to default
     expect(out.fontSize).toBe(18);
   });

@@ -35,6 +35,12 @@ export function SettingsEffect() {
 
     const densityMap = { compact: "0.75", comfortable: "1", spacious: "1.25" };
     root.style.setProperty("--rc-density", densityMap[settings.density] ?? "1");
+
+    // Accessibility flags
+    root.classList.toggle("rc-reduce-motion", settings.reduceMotion);
+    root.classList.toggle("rc-high-contrast", settings.highContrast);
+    root.classList.toggle("rc-screen-reader", settings.screenReaderOptimized);
+    root.classList.toggle("rc-focus-indicator", settings.focusIndicator);
   }, [settings]);
 
   return null;

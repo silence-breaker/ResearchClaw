@@ -5,10 +5,13 @@ import type { AppSettings } from "../lib/settings";
 
 const CATEGORIES = [
   { id: "general", label: "通用", icon: "⚙️" },
-  { id: "model", label: "模型配置", icon: "🖥️" },
+  { id: "model", label: "模型", icon: "🖥️" },
   { id: "notifications", label: "通知", icon: "🔔" },
-  { id: "integrations", label: "集成", icon: "⚡" },
-  { id: "account", label: "账户", icon: "👤" }
+  { id: "profile", label: "个人资料与账户", icon: "👤" },
+  { id: "appearance", label: "外观", icon: "🎨" },
+  { id: "security", label: "安全", icon: "🔒" },
+  { id: "accessibility", label: "辅助功能", icon: "♿" },
+  { id: "system", label: "系统", icon: "💻" }
 ] as const;
 
 type CategoryId = (typeof CATEGORIES)[number]["id"];
@@ -22,7 +25,7 @@ export function SettingsPage() {
 
       <main className="flex flex-1 gap-4 overflow-auto p-5">
         {/* 左侧设置分类菜单 */}
-        <section className="flex w-56 shrink-0 flex-col gap-1">
+        <section className="flex w-60 shrink-0 flex-col gap-1">
           <h1 className="mb-2 text-xl font-semibold text-panel-text">系统设置</h1>
           {CATEGORIES.map((c) => (
             <button
@@ -44,15 +47,20 @@ export function SettingsPage() {
         {/* 右侧设置内容区 */}
         <section className="flex-1 rounded-lg border border-panel-border bg-panel-surface p-5">
           {category === "general" && <GeneralSettings />}
-          {category === "model" && <ModelSettingsPlaceholder />}
+          {category === "model" && <PlaceholderSettings title="模型" description="模型选择、Token 限制、工具白名单等配置将在 M2 接入真实 CLI 后开放。" />}
           {category === "notifications" && <PlaceholderSettings title="通知" />}
-          {category === "integrations" && <PlaceholderSettings title="集成" />}
-          {category === "account" && <PlaceholderSettings title="账户" />}
+          {category === "profile" && <PlaceholderSettings title="个人资料与账户" />}
+          {category === "appearance" && <AppearanceSettings />}
+          {category === "security" && <PlaceholderSettings title="安全" />}
+          {category === "accessibility" && <AccessibilitySettings />}
+          {category === "system" && <SystemSettings />}
         </section>
       </main>
     </div>
   );
 }
+
+/* ── Shared UI primitives ── */
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -83,28 +91,105 @@ function Field({
   );
 }
 
+function ToggleField({
+  label,
+  description,
+  checked,
+  onChange
+}: {
+  label: string;
+  description?: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <div>
+        <div className="text-sm text-panel-text">{label}</div>
+        {description && <div className="text-xs text-panel-muted">{description}</div>}
+      </div>
+      <button
+        onClick={() => onChange(!checked)}
+        className={[
+          "relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors",
+          checked ? "bg-accent" : "bg-panel-border"
+        ].join(" ")}
+        aria-pressed={checked}
+      >
+        <span
+          className={[
+            "inline-block h-4 w-4 transform rounded-full bg-panel-bg transition-transform",
+            checked ? "translate-x-4" : "translate-x-0.5"
+          ].join(" ")}
+          style={{ marginTop: "2px" }}
+        />
+      </button>
+    </div>
+  );
+}
+
+function SaveBar({
+  hasChanges,
+  savedMsg,
+  onSave,
+  onCancel,
+  onReset
+}: {
+  hasChanges: boolean;
+  savedMsg: string | null;
+  onSave: () => void;
+  onCancel: () => void;
+  onReset: () => void;
+}) {
+  return (
+    <div className="sticky bottom-0 mt-4 flex items-center justify-end gap-2 border-t border-panel-border bg-panel-surface pt-3">
+      {hasChanges ? (
+        <span className="mr-auto text-xs text-accent-amber">有未保存的更改</span>
+      ) : savedMsg ? (
+        <span className="mr-auto text-xs text-accent-green">{savedMsg}</span>
+      ) : (
+        <span className="mr-auto text-xs text-panel-muted">已同步到本地存储</span>
+      )}
+      <button
+        onClick={onCancel}
+        disabled={!hasChanges}
+        className="rounded border border-panel-border px-4 py-1.5 text-sm text-panel-text hover:bg-panel-bg disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        取消
+      </button>
+      <button
+        onClick={onSave}
+        disabled={!hasChanges}
+        className="rounded bg-accent px-4 py-1.5 text-sm font-medium text-panel-bg hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        保存更改
+      </button>
+      <button
+        onClick={onReset}
+        className="rounded border border-accent-amber/50 px-3 py-1.5 text-xs text-accent-amber hover:bg-accent-amber/10"
+      >
+        恢复默认
+      </button>
+    </div>
+  );
+}
+
+/* ── Category: General ── */
+
 function GeneralSettings() {
   const { settings, update, reset } = useSettingsStore();
   const [draft, setDraft] = useState<AppSettings>(settings);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
 
-  // Sync draft when persisted settings change externally.
-  useEffect(() => {
-    setDraft(settings);
-  }, [settings]);
+  useEffect(() => setDraft(settings), [settings]);
 
   const hasChanges = JSON.stringify(draft) !== JSON.stringify(settings);
-
   const patch = (p: Partial<AppSettings>) => setDraft((d) => ({ ...d, ...p }));
 
   const handleSave = () => {
     update(draft);
     setSavedMsg("已保存");
     setTimeout(() => setSavedMsg(null), 1500);
-  };
-
-  const handleCancel = () => {
-    setDraft(settings);
   };
 
   return (
@@ -149,7 +234,40 @@ function GeneralSettings() {
         </Field>
       </Section>
 
-      <Section title="外观主题">
+      <SaveBar
+        hasChanges={hasChanges}
+        savedMsg={savedMsg}
+        onSave={handleSave}
+        onCancel={() => setDraft(settings)}
+        onReset={reset}
+      />
+    </div>
+  );
+}
+
+/* ── Category: Appearance ── */
+
+function AppearanceSettings() {
+  const { settings, update, reset } = useSettingsStore();
+  const [draft, setDraft] = useState<AppSettings>(settings);
+  const [savedMsg, setSavedMsg] = useState<string | null>(null);
+
+  useEffect(() => setDraft(settings), [settings]);
+
+  const hasChanges = JSON.stringify(draft) !== JSON.stringify(settings);
+  const patch = (p: Partial<AppSettings>) => setDraft((d) => ({ ...d, ...p }));
+
+  const handleSave = () => {
+    update(draft);
+    setSavedMsg("已保存");
+    setTimeout(() => setSavedMsg(null), 1500);
+  };
+
+  return (
+    <div>
+      <h2 className="mb-4 text-lg font-semibold text-panel-text">外观</h2>
+
+      <Section title="主题">
         <Field label="主题模式">
           <div className="flex gap-2">
             {[
@@ -172,6 +290,9 @@ function GeneralSettings() {
             ))}
           </div>
         </Field>
+      </Section>
+
+      <Section title="字体与排版">
         <Field label="界面字体大小" description={`当前: ${draft.fontSize}px`}>
           <input
             type="range"
@@ -211,6 +332,9 @@ function GeneralSettings() {
             <option value="SF Mono">SF Mono</option>
           </select>
         </Field>
+      </Section>
+
+      <Section title="颜色">
         <Field label="强调色">
           <div className="flex gap-2">
             {([
@@ -235,69 +359,156 @@ function GeneralSettings() {
         </Field>
       </Section>
 
-      <div className="sticky bottom-0 mt-4 flex items-center justify-end gap-2 border-t border-panel-border bg-panel-surface pt-3">
-        {hasChanges ? (
-          <span className="mr-auto text-xs text-accent-amber">有未保存的更改</span>
-        ) : savedMsg ? (
-          <span className="mr-auto text-xs text-accent-green">{savedMsg}</span>
-        ) : (
-          <span className="mr-auto text-xs text-panel-muted">已同步到本地存储</span>
-        )}
-        <button
-          onClick={handleCancel}
-          disabled={!hasChanges}
-          className="rounded border border-panel-border px-4 py-1.5 text-sm text-panel-text hover:bg-panel-bg disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          取消
-        </button>
-        <button
-          onClick={handleSave}
-          disabled={!hasChanges}
-          className="rounded bg-accent px-4 py-1.5 text-sm font-medium text-panel-bg hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          保存更改
-        </button>
-        <button
-          onClick={reset}
-          className="rounded border border-accent-amber/50 px-3 py-1.5 text-xs text-accent-amber hover:bg-accent-amber/10"
-        >
-          恢复默认
-        </button>
-      </div>
+      <SaveBar
+        hasChanges={hasChanges}
+        savedMsg={savedMsg}
+        onSave={handleSave}
+        onCancel={() => setDraft(settings)}
+        onReset={reset}
+      />
     </div>
   );
 }
 
-function ModelSettingsPlaceholder() {
+/* ── Category: Accessibility ── */
+
+function AccessibilitySettings() {
+  const { settings, update, reset } = useSettingsStore();
+  const [draft, setDraft] = useState<AppSettings>(settings);
+  const [savedMsg, setSavedMsg] = useState<string | null>(null);
+
+  useEffect(() => setDraft(settings), [settings]);
+
+  const hasChanges = JSON.stringify(draft) !== JSON.stringify(settings);
+  const patch = (p: Partial<AppSettings>) => setDraft((d) => ({ ...d, ...p }));
+
+  const handleSave = () => {
+    update(draft);
+    setSavedMsg("已保存");
+    setTimeout(() => setSavedMsg(null), 1500);
+  };
+
   return (
     <div>
-      <h2 className="mb-4 text-lg font-semibold text-panel-text">模型配置</h2>
-      <div className="rounded border border-panel-border bg-panel-bg p-4">
-        <p className="text-sm text-panel-muted">模型配置将在 M2 接入真实 CLI 后开放。</p>
-        <div className="mt-4 space-y-4 opacity-50">
-          <Field label="默认模型">
-            <select
-              disabled
-              className="cursor-not-allowed rounded border border-panel-border bg-panel-bg px-3 py-1.5 text-sm"
-            >
-              <option>claude-haiku-4-5（默认）</option>
-            </select>
-          </Field>
-          <Field label="单次最大 token">
-            <input type="range" disabled min={1024} max={8192} className="w-32" />
-          </Field>
-        </div>
-      </div>
+      <h2 className="mb-4 text-lg font-semibold text-panel-text">辅助功能</h2>
+
+      <Section title="视觉">
+        <ToggleField
+          label="减少动画"
+          description="减弱界面过渡动画效果"
+          checked={draft.reduceMotion}
+          onChange={(v) => patch({ reduceMotion: v })}
+        />
+        <ToggleField
+          label="高对比度"
+          description="增强文本与背景的对比度"
+          checked={draft.highContrast}
+          onChange={(v) => patch({ highContrast: v })}
+        />
+        <ToggleField
+          label="屏幕阅读器优化"
+          description="优化 ARIA 标签和焦点顺序"
+          checked={draft.screenReaderOptimized}
+          onChange={(v) => patch({ screenReaderOptimized: v })}
+        />
+        <ToggleField
+          label="焦点指示器"
+          description="始终显示清晰的键盘焦点轮廓"
+          checked={draft.focusIndicator}
+          onChange={(v) => patch({ focusIndicator: v })}
+        />
+      </Section>
+
+      <SaveBar
+        hasChanges={hasChanges}
+        savedMsg={savedMsg}
+        onSave={handleSave}
+        onCancel={() => setDraft(settings)}
+        onReset={reset}
+      />
     </div>
   );
 }
 
-function PlaceholderSettings({ title }: { title: string }) {
+/* ── Category: System ── */
+
+function SystemSettings() {
+  const { reset } = useSettingsStore();
+  const [cleared, setCleared] = useState(false);
+
+  const handleClearCache = () => {
+    // Placeholder: real implementation would clear query cache, localStorage, etc.
+    setCleared(true);
+    setTimeout(() => setCleared(false), 1500);
+  };
+
+  return (
+    <div>
+      <h2 className="mb-4 text-lg font-semibold text-panel-text">系统</h2>
+
+      <Section title="关于">
+        <Field label="OpenClaw Research" description="版本 v2.1.0">
+          <span className="text-sm text-panel-muted">研究助手 · M1 阶段</span>
+        </Field>
+      </Section>
+
+      <Section title="维护">
+        <Field label="缓存清理" description="清除本地缓存数据，不影响项目数据">
+          <button
+            onClick={handleClearCache}
+            className="rounded border border-panel-border px-3 py-1.5 text-sm text-panel-text hover:bg-panel-bg"
+          >
+            {cleared ? "已清理" : "立即清理"}
+          </button>
+        </Field>
+        <Field label="恢复默认设置" description="将所有设置重置为出厂默认值">
+          <button
+            onClick={reset}
+            className="rounded border border-accent-amber/50 px-3 py-1.5 text-sm text-accent-amber hover:bg-accent-amber/10"
+          >
+            恢复默认
+          </button>
+        </Field>
+      </Section>
+
+      <Section title="高级">
+        <Field label="导入/导出设置" description="备份或恢复设置配置">
+          <div className="flex gap-2">
+            <button
+              disabled
+              className="rounded border border-panel-border px-3 py-1.5 text-sm text-panel-muted disabled:cursor-not-allowed"
+            >
+              导出
+            </button>
+            <button
+              disabled
+              className="rounded border border-panel-border px-3 py-1.5 text-sm text-panel-muted disabled:cursor-not-allowed"
+            >
+              导入
+            </button>
+          </div>
+        </Field>
+        <Field label="快捷键" description="自定义键盘快捷键">
+          <button
+            disabled
+            className="rounded border border-panel-border px-3 py-1.5 text-sm text-panel-muted disabled:cursor-not-allowed"
+          >
+            查看快捷键
+          </button>
+        </Field>
+      </Section>
+    </div>
+  );
+}
+
+/* ── Placeholder ── */
+
+function PlaceholderSettings({ title, description }: { title: string; description?: string }) {
   return (
     <div>
       <h2 className="mb-4 text-lg font-semibold text-panel-text">{title}</h2>
       <div className="rounded border border-panel-border bg-panel-bg p-4 text-sm text-panel-muted">
-        该模块将在后续版本开放，当前为占位界面。
+        {description ?? "该模块将在后续版本开放，当前为占位界面。"}
       </div>
     </div>
   );
