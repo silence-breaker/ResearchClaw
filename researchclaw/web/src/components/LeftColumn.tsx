@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import type { ProjectState, ResearchPhase } from "../api/types";
 import type { StreamStatus } from "../api/useProjectStream";
 
@@ -16,7 +16,12 @@ const PHASE_LABEL: Partial<Record<ResearchPhase, string>> = {
   blocked: "需修订"
 };
 
-const NAV_ENABLED = ["概览", "研究工作流"];
+const NAV_ITEMS: { label: string; path: string }[] = [
+  { label: "概览", path: "/" },
+  { label: "研究工作流", path: "/" },
+  { label: "设置", path: "/settings" }
+];
+
 const NAV_PLACEHOLDER = ["文献库", "实验管理", "记忆库"];
 
 function elapsed(createdAt: string): string {
@@ -27,8 +32,18 @@ function elapsed(createdAt: string): string {
   return h > 0 ? `${h}h ${m % 60}m` : `${m}m`;
 }
 
-export function LeftColumn({ state, status }: { state: ProjectState; status: StreamStatus }) {
-  const running = state.phase !== "idle" && state.phase !== "blocked";
+function isActive(currentPath: string, navPath: string): boolean {
+  if (navPath === "/") {
+    return currentPath === "/" || currentPath === "/app/" || currentPath === "/app";
+  }
+  return currentPath === navPath || currentPath.startsWith(`${navPath}/`);
+}
+
+export function LeftColumn({ state, status }: { state?: ProjectState; status?: StreamStatus }) {
+  const location = useLocation();
+  const currentPath = location.pathname;
+  const running = state && state.phase !== "idle" && state.phase !== "blocked";
+
   return (
     <aside className="flex w-60 shrink-0 flex-col gap-4 border-r border-panel-border bg-panel-surface p-4">
       <div>
@@ -37,36 +52,61 @@ export function LeftColumn({ state, status }: { state: ProjectState; status: Str
       </div>
 
       <nav className="space-y-1 text-sm">
-        {NAV_ENABLED.map((item) => (
-          <div key={item} className="rounded px-2 py-1 text-panel-text hover:bg-panel-bg">
-            {item}
-          </div>
-        ))}
+        {NAV_ITEMS.map((item) => {
+          const active = isActive(currentPath, item.path);
+          return (
+            <Link
+              key={item.label}
+              to={item.path}
+              className={[
+                "block rounded px-2 py-1",
+                active
+                  ? "bg-panel-bg font-medium text-accent"
+                  : "text-panel-text hover:bg-panel-bg"
+              ].join(" ")}
+            >
+              {item.label}
+            </Link>
+          );
+        })}
         {NAV_PLACEHOLDER.map((item) => (
-          <div key={item} className="cursor-not-allowed rounded px-2 py-1 text-panel-muted/60" title="后续版本">
+          <div
+            key={item}
+            className="cursor-not-allowed rounded px-2 py-1 text-panel-muted/60"
+            title="后续版本"
+          >
             {item}
           </div>
         ))}
       </nav>
 
-      <div className="rounded-lg border border-panel-border bg-panel-bg p-3">
-        <div className="text-xs text-panel-muted">当前研究</div>
-        <div className="mt-1 truncate text-sm text-panel-text" title={state.current.research_direction}>
-          {state.current.research_direction ?? state.project_id}
+      {state && (
+        <div className="rounded-lg border border-panel-border bg-panel-bg p-3">
+          <div className="text-xs text-panel-muted">当前研究</div>
+          <div
+            className="mt-1 truncate text-sm text-panel-text"
+            title={state.current.research_direction}
+          >
+            {state.current.research_direction ?? state.project_id}
+          </div>
+          <div className="mt-2 flex items-center justify-between text-xs">
+            <span className={running ? "text-accent-green" : "text-panel-muted"}>
+              {PHASE_LABEL[state.phase] ?? state.phase}
+            </span>
+            <span className="text-panel-muted">{elapsed(state.created_at)}</span>
+          </div>
         </div>
-        <div className="mt-2 flex items-center justify-between text-xs">
-          <span className={running ? "text-accent-green" : "text-panel-muted"}>
-            {PHASE_LABEL[state.phase] ?? state.phase}
-          </span>
-          <span className="text-panel-muted">{elapsed(state.created_at)}</span>
-        </div>
-      </div>
+      )}
 
       <div className="mt-auto space-y-2">
-        <div className="flex items-center gap-2 text-xs text-panel-muted">
-          <span className={`h-2 w-2 rounded-full ${status === "live" ? "bg-accent-green" : "bg-accent-amber"}`} />
-          {status === "live" ? "实时连接" : status === "polling" ? "轮询兜底" : "连接中"}
-        </div>
+        {status && (
+          <div className="flex items-center gap-2 text-xs text-panel-muted">
+            <span
+              className={`h-2 w-2 rounded-full ${status === "live" ? "bg-accent-green" : "bg-accent-amber"}`}
+            />
+            {status === "live" ? "实时连接" : status === "polling" ? "轮询兜底" : "连接中"}
+          </div>
+        )}
         <Link to="/" className="block text-xs text-accent hover:underline">
           ← 返回项目列表
         </Link>
