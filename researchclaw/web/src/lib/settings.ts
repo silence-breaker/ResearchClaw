@@ -8,6 +8,7 @@ export type Density = "compact" | "comfortable" | "spacious";
 export type AccentColor = "blue" | "cyan" | "pink" | "orange" | "green";
 export type AutoSaveInterval = "off" | "30s" | "1m" | "5m";
 export type StartupPage = "projects" | "last" | "blank";
+export type NotificationFrequency = "immediate" | "batch" | "digest";
 
 export interface AppSettings {
   // ── General ──
@@ -18,6 +19,7 @@ export interface AppSettings {
   autoSaveInterval: AutoSaveInterval;
   startupPage: StartupPage;
   confirmBeforeDelete: boolean;
+  volume: number;
 
   // ── Appearance ──
   theme: ThemeMode;
@@ -30,6 +32,20 @@ export interface AppSettings {
   backgroundColor: string;
   chatColor: string;
   codeColor: string;
+
+  // ── Notifications ──
+  messageNotification: boolean;
+  soundEnabled: boolean;
+  emailNotification: boolean;
+  popupNotification: boolean;
+  phaseCompleteNotification: boolean;
+  doNotDisturb: boolean;
+  quietHoursStart: string;
+  quietHoursEnd: string;
+  errorNotification: boolean;
+  mentionNotification: boolean;
+  systemAnnouncement: boolean;
+  notificationFrequency: NotificationFrequency;
 
   // ── Accessibility ──
   reduceMotion: boolean;
@@ -46,6 +62,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   autoSaveInterval: "1m",
   startupPage: "projects",
   confirmBeforeDelete: true,
+  volume: 50,
   theme: "dark",
   fontSize: 14,
   density: "comfortable",
@@ -56,6 +73,18 @@ export const DEFAULT_SETTINGS: AppSettings = {
   backgroundColor: "#0d1117",
   chatColor: "#161b22",
   codeColor: "#1e2530",
+  messageNotification: true,
+  soundEnabled: true,
+  emailNotification: false,
+  popupNotification: true,
+  phaseCompleteNotification: true,
+  doNotDisturb: false,
+  quietHoursStart: "22:00",
+  quietHoursEnd: "08:00",
+  errorNotification: true,
+  mentionNotification: true,
+  systemAnnouncement: true,
+  notificationFrequency: "immediate",
   reduceMotion: false,
   highContrast: false,
   screenReaderOptimized: false,
@@ -69,11 +98,14 @@ export const VALID_DENSITIES: Density[] = ["compact", "comfortable", "spacious"]
 export const VALID_ACCENT_COLORS: AccentColor[] = ["blue", "cyan", "pink", "orange", "green"];
 export const VALID_AUTO_SAVE_INTERVALS: AutoSaveInterval[] = ["off", "30s", "1m", "5m"];
 export const VALID_STARTUP_PAGES: StartupPage[] = ["projects", "last", "blank"];
+export const VALID_NOTIFICATION_FREQUENCIES: NotificationFrequency[] = ["immediate", "batch", "digest"];
 
 export const FONT_SIZE_MIN = 12;
 export const FONT_SIZE_MAX = 18;
 export const BRIGHTNESS_MIN = 50;
 export const BRIGHTNESS_MAX = 150;
+export const VOLUME_MIN = 0;
+export const VOLUME_MAX = 100;
 
 export function clampFontSize(n: number): number {
   return Math.max(FONT_SIZE_MIN, Math.min(FONT_SIZE_MAX, Math.round(n)));
@@ -81,6 +113,10 @@ export function clampFontSize(n: number): number {
 
 export function clampBrightness(n: number): number {
   return Math.max(BRIGHTNESS_MIN, Math.min(BRIGHTNESS_MAX, Math.round(n)));
+}
+
+export function clampVolume(n: number): number {
+  return Math.max(VOLUME_MIN, Math.min(VOLUME_MAX, Math.round(n)));
 }
 
 export function isValidAccentColor(c: string): c is AccentColor {
@@ -97,7 +133,6 @@ export function migrateSettings(raw: unknown): AppSettings {
   }
   const partial = raw as Partial<AppSettings> & { codeFont?: string };
 
-  // Migrate old codeFont -> fontFamily
   let fontFamily = DEFAULT_SETTINGS.fontFamily;
   if (typeof partial.fontFamily === "string") {
     fontFamily = partial.fontFamily;
@@ -127,6 +162,7 @@ export function migrateSettings(raw: unknown): AppSettings {
       typeof partial.confirmBeforeDelete === "boolean"
         ? partial.confirmBeforeDelete
         : DEFAULT_SETTINGS.confirmBeforeDelete,
+    volume: clampVolume(typeof partial.volume === "number" ? partial.volume : DEFAULT_SETTINGS.volume),
     theme: VALID_THEMES.includes(partial.theme as ThemeMode) ? (partial.theme as ThemeMode) : DEFAULT_SETTINGS.theme,
     fontSize: clampFontSize(typeof partial.fontSize === "number" ? partial.fontSize : DEFAULT_SETTINGS.fontSize),
     density: VALID_DENSITIES.includes(partial.density as Density)
@@ -147,6 +183,26 @@ export function migrateSettings(raw: unknown): AppSettings {
     codeColor: isValidHexColor(partial.codeColor as string)
       ? (partial.codeColor as string)
       : DEFAULT_SETTINGS.codeColor,
+    messageNotification:
+      typeof partial.messageNotification === "boolean"
+        ? partial.messageNotification
+        : DEFAULT_SETTINGS.messageNotification,
+    soundEnabled: typeof partial.soundEnabled === "boolean" ? partial.soundEnabled : DEFAULT_SETTINGS.soundEnabled,
+    emailNotification: typeof partial.emailNotification === "boolean" ? partial.emailNotification : DEFAULT_SETTINGS.emailNotification,
+    popupNotification: typeof partial.popupNotification === "boolean" ? partial.popupNotification : DEFAULT_SETTINGS.popupNotification,
+    phaseCompleteNotification:
+      typeof partial.phaseCompleteNotification === "boolean"
+        ? partial.phaseCompleteNotification
+        : DEFAULT_SETTINGS.phaseCompleteNotification,
+    doNotDisturb: typeof partial.doNotDisturb === "boolean" ? partial.doNotDisturb : DEFAULT_SETTINGS.doNotDisturb,
+    quietHoursStart: typeof partial.quietHoursStart === "string" ? partial.quietHoursStart : DEFAULT_SETTINGS.quietHoursStart,
+    quietHoursEnd: typeof partial.quietHoursEnd === "string" ? partial.quietHoursEnd : DEFAULT_SETTINGS.quietHoursEnd,
+    errorNotification: typeof partial.errorNotification === "boolean" ? partial.errorNotification : DEFAULT_SETTINGS.errorNotification,
+    mentionNotification: typeof partial.mentionNotification === "boolean" ? partial.mentionNotification : DEFAULT_SETTINGS.mentionNotification,
+    systemAnnouncement: typeof partial.systemAnnouncement === "boolean" ? partial.systemAnnouncement : DEFAULT_SETTINGS.systemAnnouncement,
+    notificationFrequency: VALID_NOTIFICATION_FREQUENCIES.includes(partial.notificationFrequency as NotificationFrequency)
+      ? (partial.notificationFrequency as NotificationFrequency)
+      : DEFAULT_SETTINGS.notificationFrequency,
     reduceMotion: typeof partial.reduceMotion === "boolean" ? partial.reduceMotion : DEFAULT_SETTINGS.reduceMotion,
     highContrast: typeof partial.highContrast === "boolean" ? partial.highContrast : DEFAULT_SETTINGS.highContrast,
     screenReaderOptimized:

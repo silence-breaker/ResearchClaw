@@ -126,7 +126,7 @@ export function SettingsPage() {
             <div className="rounded-lg border border-panel-border bg-panel-surface p-5">
               {activeCategory === "general" && <GeneralSettings />}
               {activeCategory === "model" && <ModelSettings />}
-              {activeCategory === "notifications" && <PlaceholderSettings />}
+              {activeCategory === "notifications" && <NotificationSettings />}
               {activeCategory === "profile" && <ProfileSettings />}
               {activeCategory === "appearance" && <AppearanceSettings />}
               {activeCategory === "security" && <PlaceholderSettings />}
@@ -390,6 +390,19 @@ function GeneralSettings() {
         />
       </Section>
 
+      <Section title="声音">
+        <Field label="系统音量" description={`当前: ${draft.volume}%`}>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={draft.volume}
+            onChange={(e) => patch({ volume: Number(e.target.value) })}
+            className="w-32 accent-accent"
+          />
+        </Field>
+      </Section>
+
       <SaveBar
         hasChanges={hasChanges}
         onSave={() => { update(draft); setPreview(null); }}
@@ -617,6 +630,143 @@ function AccessibilitySettings() {
           checked={draft.focusIndicator}
           onChange={(v) => patch({ focusIndicator: v })}
         />
+      </Section>
+
+      <SaveBar
+        hasChanges={hasChanges}
+        onSave={() => { update(draft); setPreview(null); }}
+        onCancel={() => { setDraft(settings); setPreview(null); }}
+        onReset={() => { reset(); setPreview(null); }}
+      />
+    </div>
+  );
+}
+
+/* ── Category: Notifications ── */
+
+const NOTIFICATION_FREQUENCY_OPTIONS: { value: AppSettings["notificationFrequency"]; label: string }[] = [
+  { value: "immediate", label: "即时" },
+  { value: "batch", label: "批量" },
+  { value: "digest", label: "日报" }
+];
+
+function NotificationSettings() {
+  const { settings, update, setPreview, reset } = useSettingsStore();
+  const [draft, setDraft] = useState<AppSettings>(settings);
+
+  useEffect(() => setDraft(settings), [settings]);
+  useEffect(() => () => setPreview(null), []);
+
+  const hasChanges = JSON.stringify(draft) !== JSON.stringify(settings);
+  const patch = (p: Partial<AppSettings>) => {
+    const next = { ...draft, ...p };
+    setDraft(next);
+    setPreview(next);
+  };
+
+  return (
+    <div>
+      <Section title="通知方式">
+        <ToggleField
+          label="消息提醒"
+          description="接收系统消息和事件通知"
+          checked={draft.messageNotification}
+          onChange={(v) => patch({ messageNotification: v })}
+        />
+        <ToggleField
+          label="提示音"
+          description="新通知到达时播放声音"
+          checked={draft.soundEnabled}
+          onChange={(v) => patch({ soundEnabled: v })}
+        />
+        <ToggleField
+          label="弹窗提醒"
+          description="通过浏览器弹窗显示通知"
+          checked={draft.popupNotification}
+          onChange={(v) => patch({ popupNotification: v })}
+        />
+        <ToggleField
+          label="邮件提醒"
+          description="将重要通知发送到邮箱（M3+）"
+          checked={draft.emailNotification}
+          onChange={(v) => patch({ emailNotification: v })}
+        />
+      </Section>
+
+      <Section title="通知内容">
+        <ToggleField
+          label="阶段完成通知"
+          description="研究阶段完成时通知"
+          checked={draft.phaseCompleteNotification}
+          onChange={(v) => patch({ phaseCompleteNotification: v })}
+        />
+        <ToggleField
+          label="报错通知"
+          description="系统或模型出错时通知"
+          checked={draft.errorNotification}
+          onChange={(v) => patch({ errorNotification: v })}
+        />
+        <ToggleField
+          label="被@提醒"
+          description="有人在评论中@你时通知"
+          checked={draft.mentionNotification}
+          onChange={(v) => patch({ mentionNotification: v })}
+        />
+        <ToggleField
+          label="系统公告"
+          description="接收维护和更新公告"
+          checked={draft.systemAnnouncement}
+          onChange={(v) => patch({ systemAnnouncement: v })}
+        />
+      </Section>
+
+      <Section title="通知频率">
+        <Field label="推送频率">
+          <div className="flex gap-2 text-xs">
+            {NOTIFICATION_FREQUENCY_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => patch({ notificationFrequency: opt.value })}
+                className={[
+                  "rounded border px-2.5 py-1.5",
+                  draft.notificationFrequency === opt.value
+                    ? "border-accent bg-accent/10 text-accent"
+                    : "border-panel-border bg-panel-bg text-panel-text hover:border-accent"
+                ].join(" ")}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </Field>
+      </Section>
+
+      <Section title="免打扰">
+        <ToggleField
+          label="开启免打扰"
+          description="在设定时段内静音所有通知"
+          checked={draft.doNotDisturb}
+          onChange={(v) => patch({ doNotDisturb: v })}
+        />
+        <Field label="免打扰时段">
+          <div className="flex items-center gap-2 text-sm text-panel-text">
+            <input
+              type="time"
+              value={draft.quietHoursStart}
+              onChange={(e) => patch({ quietHoursStart: e.target.value })}
+              disabled={!draft.doNotDisturb}
+              className="rounded border border-panel-border bg-panel-bg px-2 py-1 text-sm outline-none focus:border-accent disabled:cursor-not-allowed disabled:opacity-50"
+            />
+            <span>至</span>
+            <input
+              type="time"
+              value={draft.quietHoursEnd}
+              onChange={(e) => patch({ quietHoursEnd: e.target.value })}
+              disabled={!draft.doNotDisturb}
+              className="rounded border border-panel-border bg-panel-bg px-2 py-1 text-sm outline-none focus:border-accent disabled:cursor-not-allowed disabled:opacity-50"
+            />
+          </div>
+        </Field>
       </Section>
 
       <SaveBar
