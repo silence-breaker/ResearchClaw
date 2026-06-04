@@ -4,7 +4,9 @@ import { DEFAULT_SETTINGS, migrateSettings, type AppSettings } from "../lib/sett
 
 interface SettingsState {
   settings: AppSettings;
+  preview: Partial<AppSettings> | null;
   update: (patch: Partial<AppSettings>) => void;
+  setPreview: (patch: Partial<AppSettings> | null) => void;
   reset: () => void;
 }
 
@@ -14,11 +16,14 @@ export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
       settings: DEFAULT_SETTINGS,
+      preview: null,
       update: (patch) =>
         set((state) => ({
-          settings: migrateSettings({ ...state.settings, ...patch })
+          settings: migrateSettings({ ...state.settings, ...patch }),
+          preview: null
         })),
-      reset: () => set({ settings: DEFAULT_SETTINGS })
+      setPreview: (patch) => set({ preview: patch }),
+      reset: () => set({ settings: DEFAULT_SETTINGS, preview: null })
     }),
     {
       name: STORAGE_KEY,
@@ -26,10 +31,10 @@ export const useSettingsStore = create<SettingsState>()(
       partialize: (state) => ({ settings: state.settings }),
       migrate: (persistedState) => {
         if (!persistedState || typeof persistedState !== "object") {
-          return { settings: DEFAULT_SETTINGS } as SettingsState;
+          return { settings: DEFAULT_SETTINGS, preview: null } as SettingsState;
         }
         const raw = (persistedState as { settings?: unknown }).settings;
-        return { settings: migrateSettings(raw) } as SettingsState;
+        return { settings: migrateSettings(raw), preview: null } as SettingsState;
       }
     }
   )

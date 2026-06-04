@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { LeftColumn } from "../components/LeftColumn";
 import { ProfileSettings } from "../components/ProfileSettings";
 import { useSettingsStore } from "../stores/settings";
-import { FONT_FAMILY_OPTIONS, DEFAULT_MODEL_COLORS, type AppSettings } from "../lib/settings";
+import { FONT_FAMILY_OPTIONS, type AppSettings } from "../lib/settings";
 
 /* ── Category definitions ── */
 
@@ -211,13 +211,11 @@ function ToggleField({
 
 function SaveBar({
   hasChanges,
-  savedMsg,
   onSave,
   onCancel,
   onReset
 }: {
   hasChanges: boolean;
-  savedMsg: string | null;
   onSave: () => void;
   onCancel: () => void;
   onReset: () => void;
@@ -225,11 +223,9 @@ function SaveBar({
   return (
     <div className="sticky bottom-0 mt-4 flex items-center justify-end gap-2 border-t border-panel-border bg-panel-surface pt-3">
       {hasChanges ? (
-        <span className="mr-auto text-xs text-accent-amber">有未保存的更改</span>
-      ) : savedMsg ? (
-        <span className="mr-auto text-xs text-accent-green">{savedMsg}</span>
+        <span className="mr-auto text-xs text-accent-amber">预览中 — 未保存</span>
       ) : (
-        <span className="mr-auto text-xs text-panel-muted">已同步到本地存储</span>
+        <span className="mr-auto text-xs text-accent-green">✓ 已保存</span>
       )}
       <button
         onClick={onCancel}
@@ -243,10 +239,12 @@ function SaveBar({
         disabled={!hasChanges}
         className="rounded bg-accent px-4 py-1.5 text-sm font-medium text-panel-bg hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        保存更改
+        确认
       </button>
       <button
-        onClick={onReset}
+        onClick={() => {
+          if (confirm("确定要恢复默认设置吗？所有更改将丢失。")) onReset();
+        }}
         className="rounded border border-accent-amber/50 px-3 py-1.5 text-xs text-accent-amber hover:bg-accent-amber/10"
       >
         恢复默认
@@ -281,19 +279,17 @@ const STARTUP_OPTIONS: { value: AppSettings["startupPage"]; label: string }[] = 
 ];
 
 function GeneralSettings() {
-  const { settings, update, reset } = useSettingsStore();
+  const { settings, update, setPreview, reset } = useSettingsStore();
   const [draft, setDraft] = useState<AppSettings>(settings);
-  const [savedMsg, setSavedMsg] = useState<string | null>(null);
 
   useEffect(() => setDraft(settings), [settings]);
+  useEffect(() => () => setPreview(null), []);
 
   const hasChanges = JSON.stringify(draft) !== JSON.stringify(settings);
-  const patch = (p: Partial<AppSettings>) => setDraft((d) => ({ ...d, ...p }));
-
-  const handleSave = () => {
-    update(draft);
-    setSavedMsg("已保存");
-    setTimeout(() => setSavedMsg(null), 1500);
+  const patch = (p: Partial<AppSettings>) => {
+    const next = { ...draft, ...p };
+    setDraft(next);
+    setPreview(next);
   };
 
   return (
@@ -395,10 +391,9 @@ function GeneralSettings() {
 
       <SaveBar
         hasChanges={hasChanges}
-        savedMsg={savedMsg}
-        onSave={handleSave}
-        onCancel={() => setDraft(settings)}
-        onReset={reset}
+        onSave={() => { update(draft); setPreview(null); }}
+        onCancel={() => { setDraft(settings); setPreview(null); }}
+        onReset={() => { reset(); setPreview(null); }}
       />
     </div>
   );
@@ -406,29 +401,18 @@ function GeneralSettings() {
 
 /* ── Category: Appearance ── */
 
-const MODEL_COLOR_ENTRIES = Object.entries(DEFAULT_MODEL_COLORS).filter(([k]) => k !== "default");
-
 function AppearanceSettings() {
-  const { settings, update, reset } = useSettingsStore();
+  const { settings, update, setPreview, reset } = useSettingsStore();
   const [draft, setDraft] = useState<AppSettings>(settings);
-  const [savedMsg, setSavedMsg] = useState<string | null>(null);
 
   useEffect(() => setDraft(settings), [settings]);
+  useEffect(() => () => setPreview(null), []);
 
   const hasChanges = JSON.stringify(draft) !== JSON.stringify(settings);
-  const patch = (p: Partial<AppSettings>) => setDraft((d) => ({ ...d, ...p }));
-
-  const handleSave = () => {
-    update(draft);
-    setSavedMsg("已保存");
-    setTimeout(() => setSavedMsg(null), 1500);
-  };
-
-  const patchModelColor = (model: string, color: string) => {
-    setDraft((d) => ({
-      ...d,
-      modelColors: { ...d.modelColors, [model]: color }
-    }));
+  const patch = (p: Partial<AppSettings>) => {
+    const next = { ...draft, ...p };
+    setDraft(next);
+    setPreview(next);
   };
 
   return (
@@ -458,24 +442,24 @@ function AppearanceSettings() {
         </Field>
         <ToggleField
           label="夜间模式"
-          description="降低蓝光，适合暗光环境使用"
+          description="降低蓝光，适合暗光环境"
           checked={draft.nightMode}
           onChange={(v) => patch({ nightMode: v })}
         />
       </Section>
 
       <Section title="显示">
-        <Field label="界面亮度" description={`当前: ${draft.brightness}%`}>
+        <Field label="亮度" description={`当前: ${draft.brightness}%`}>
           <input
             type="range"
-            min={80}
-            max={120}
+            min={50}
+            max={150}
             value={draft.brightness}
             onChange={(e) => patch({ brightness: Number(e.target.value) })}
             className="w-32 accent-accent"
           />
         </Field>
-        <Field label="界面字体大小" description={`当前: ${draft.fontSize}px`}>
+        <Field label="字体大小" description={`当前: ${draft.fontSize}px`}>
           <input
             type="range"
             min={12}
@@ -506,7 +490,7 @@ function AppearanceSettings() {
       </Section>
 
       <Section title="字体">
-        <Field label="字体" description="所有文本统一使用此字体">
+        <Field label="字体" description="界面所有文本统一使用此字体">
           <select
             value={draft.fontFamily}
             onChange={(e) => patch({ fontFamily: e.target.value })}
@@ -544,38 +528,46 @@ function AppearanceSettings() {
             ))}
           </div>
         </Field>
-      </Section>
-
-      <Section title="模型标识色">
-        <Field label="" description="对话中各 AI 模型的背景标识色">
-          <div />
+        <Field label="背景颜色">
+          <div className="flex items-center gap-2">
+            <input
+              type="color"
+              value={draft.backgroundColor}
+              onChange={(e) => patch({ backgroundColor: e.target.value })}
+              className="h-7 w-7 cursor-pointer rounded border border-panel-border bg-transparent p-0.5"
+            />
+            <span className="text-xs text-panel-muted font-mono">{draft.backgroundColor}</span>
+          </div>
         </Field>
-        {MODEL_COLOR_ENTRIES.map(([model, defaultColor]) => (
-          <Field
-            key={model}
-            label={model.charAt(0).toUpperCase() + model.slice(1)}
-          >
-            <div className="flex items-center gap-2">
-              <input
-                type="color"
-                value={draft.modelColors[model] ?? defaultColor}
-                onChange={(e) => patchModelColor(model, e.target.value)}
-                className="h-7 w-7 cursor-pointer rounded border border-panel-border bg-transparent p-0.5"
-              />
-              <span className="text-xs text-panel-muted font-mono">
-                {draft.modelColors[model] ?? defaultColor}
-              </span>
-            </div>
-          </Field>
-        ))}
+        <Field label="对话颜色">
+          <div className="flex items-center gap-2">
+            <input
+              type="color"
+              value={draft.chatColor}
+              onChange={(e) => patch({ chatColor: e.target.value })}
+              className="h-7 w-7 cursor-pointer rounded border border-panel-border bg-transparent p-0.5"
+            />
+            <span className="text-xs text-panel-muted font-mono">{draft.chatColor}</span>
+          </div>
+        </Field>
+        <Field label="代码颜色">
+          <div className="flex items-center gap-2">
+            <input
+              type="color"
+              value={draft.codeColor}
+              onChange={(e) => patch({ codeColor: e.target.value })}
+              className="h-7 w-7 cursor-pointer rounded border border-panel-border bg-transparent p-0.5"
+            />
+            <span className="text-xs text-panel-muted font-mono">{draft.codeColor}</span>
+          </div>
+        </Field>
       </Section>
 
       <SaveBar
         hasChanges={hasChanges}
-        savedMsg={savedMsg}
-        onSave={handleSave}
-        onCancel={() => setDraft(settings)}
-        onReset={reset}
+        onSave={() => { update(draft); setPreview(null); }}
+        onCancel={() => { setDraft(settings); setPreview(null); }}
+        onReset={() => { reset(); setPreview(null); }}
       />
     </div>
   );
@@ -584,19 +576,17 @@ function AppearanceSettings() {
 /* ── Category: Accessibility ── */
 
 function AccessibilitySettings() {
-  const { settings, update, reset } = useSettingsStore();
+  const { settings, update, setPreview, reset } = useSettingsStore();
   const [draft, setDraft] = useState<AppSettings>(settings);
-  const [savedMsg, setSavedMsg] = useState<string | null>(null);
 
   useEffect(() => setDraft(settings), [settings]);
+  useEffect(() => () => setPreview(null), []);
 
   const hasChanges = JSON.stringify(draft) !== JSON.stringify(settings);
-  const patch = (p: Partial<AppSettings>) => setDraft((d) => ({ ...d, ...p }));
-
-  const handleSave = () => {
-    update(draft);
-    setSavedMsg("已保存");
-    setTimeout(() => setSavedMsg(null), 1500);
+  const patch = (p: Partial<AppSettings>) => {
+    const next = { ...draft, ...p };
+    setDraft(next);
+    setPreview(next);
   };
 
   return (
@@ -630,10 +620,9 @@ function AccessibilitySettings() {
 
       <SaveBar
         hasChanges={hasChanges}
-        savedMsg={savedMsg}
-        onSave={handleSave}
-        onCancel={() => setDraft(settings)}
-        onReset={reset}
+        onSave={() => { update(draft); setPreview(null); }}
+        onCancel={() => { setDraft(settings); setPreview(null); }}
+        onReset={() => { reset(); setPreview(null); }}
       />
     </div>
   );

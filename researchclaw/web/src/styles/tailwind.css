@@ -9,6 +9,9 @@
   --rc-accent: #58a6ff;
   --rc-density: 1;
   --rc-brightness: 100%;
+  --rc-bg: #0d1117;
+  --rc-chat-bg: #161b22;
+  --rc-code-bg: #1e2530;
 }
 
 html {
@@ -17,19 +20,18 @@ html {
 
 body {
   margin: 0;
-  background-color: #0d1117;
+  background-color: var(--rc-bg);
   color: #c9d1d9;
   font-family: var(--rc-font-family);
   filter: brightness(var(--rc-brightness));
 }
 
-/* ── Night mode: reduce blue light on dark backgrounds ── */
-
+/* Night mode filter */
 .rc-night-mode body {
   filter: brightness(var(--rc-brightness)) sepia(0.08) hue-rotate(-12deg);
 }
 
-/* ── Accessibility ── */
+/* Accessibility */
 
 .rc-reduce-motion *,
 .rc-reduce-motion *::before,

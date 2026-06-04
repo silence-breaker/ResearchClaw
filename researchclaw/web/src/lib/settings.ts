@@ -27,7 +27,9 @@ export interface AppSettings {
   accentColor: AccentColor;
   brightness: number;
   nightMode: boolean;
-  modelColors: Record<string, string>;
+  backgroundColor: string;
+  chatColor: string;
+  codeColor: string;
 
   // ── Accessibility ──
   reduceMotion: boolean;
@@ -35,14 +37,6 @@ export interface AppSettings {
   screenReaderOptimized: boolean;
   focusIndicator: boolean;
 }
-
-export const DEFAULT_MODEL_COLORS: Record<string, string> = {
-  claude: "#e74c3c",
-  gemini: "#27ae60",
-  gpt: "#3498db",
-  codex: "#9b59b6",
-  default: "#95a5a6"
-};
 
 export const DEFAULT_SETTINGS: AppSettings = {
   language: "zh-CN",
@@ -59,7 +53,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   accentColor: "blue",
   brightness: 100,
   nightMode: false,
-  modelColors: { ...DEFAULT_MODEL_COLORS },
+  backgroundColor: "#0d1117",
+  chatColor: "#161b22",
+  codeColor: "#1e2530",
   reduceMotion: false,
   highContrast: false,
   screenReaderOptimized: false,
@@ -76,8 +72,8 @@ export const VALID_STARTUP_PAGES: StartupPage[] = ["projects", "last", "blank"];
 
 export const FONT_SIZE_MIN = 12;
 export const FONT_SIZE_MAX = 18;
-export const BRIGHTNESS_MIN = 80;
-export const BRIGHTNESS_MAX = 120;
+export const BRIGHTNESS_MIN = 50;
+export const BRIGHTNESS_MAX = 150;
 
 export function clampFontSize(n: number): number {
   return Math.max(FONT_SIZE_MIN, Math.min(FONT_SIZE_MAX, Math.round(n)));
@@ -91,9 +87,8 @@ export function isValidAccentColor(c: string): c is AccentColor {
   return VALID_ACCENT_COLORS.includes(c as AccentColor);
 }
 
-function isValidModelColors(v: unknown): v is Record<string, string> {
-  if (!v || typeof v !== "object") return false;
-  return Object.entries(v as Record<string, unknown>).every(([, val]) => typeof val === "string");
+export function isValidHexColor(c: string): boolean {
+  return /^#[0-9A-Fa-f]{6}$/.test(c);
 }
 
 export function migrateSettings(raw: unknown): AppSettings {
@@ -102,12 +97,12 @@ export function migrateSettings(raw: unknown): AppSettings {
   }
   const partial = raw as Partial<AppSettings> & { codeFont?: string };
 
-  // Migrate old codeFont -> fontFamily if present
-  let migratedFontFamily = DEFAULT_SETTINGS.fontFamily;
+  // Migrate old codeFont -> fontFamily
+  let fontFamily = DEFAULT_SETTINGS.fontFamily;
   if (typeof partial.fontFamily === "string") {
-    migratedFontFamily = partial.fontFamily;
+    fontFamily = partial.fontFamily;
   } else if (typeof partial.codeFont === "string") {
-    migratedFontFamily = partial.codeFont + ', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+    fontFamily = `${partial.codeFont}, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
   }
 
   return {
@@ -137,15 +132,21 @@ export function migrateSettings(raw: unknown): AppSettings {
     density: VALID_DENSITIES.includes(partial.density as Density)
       ? (partial.density as Density)
       : DEFAULT_SETTINGS.density,
-    fontFamily: migratedFontFamily,
+    fontFamily,
     accentColor: isValidAccentColor(partial.accentColor as string)
       ? (partial.accentColor as AccentColor)
       : DEFAULT_SETTINGS.accentColor,
     brightness: clampBrightness(typeof partial.brightness === "number" ? partial.brightness : DEFAULT_SETTINGS.brightness),
     nightMode: typeof partial.nightMode === "boolean" ? partial.nightMode : DEFAULT_SETTINGS.nightMode,
-    modelColors: isValidModelColors(partial.modelColors)
-      ? (partial.modelColors as Record<string, string>)
-      : { ...DEFAULT_SETTINGS.modelColors },
+    backgroundColor: isValidHexColor(partial.backgroundColor as string)
+      ? (partial.backgroundColor as string)
+      : DEFAULT_SETTINGS.backgroundColor,
+    chatColor: isValidHexColor(partial.chatColor as string)
+      ? (partial.chatColor as string)
+      : DEFAULT_SETTINGS.chatColor,
+    codeColor: isValidHexColor(partial.codeColor as string)
+      ? (partial.codeColor as string)
+      : DEFAULT_SETTINGS.codeColor,
     reduceMotion: typeof partial.reduceMotion === "boolean" ? partial.reduceMotion : DEFAULT_SETTINGS.reduceMotion,
     highContrast: typeof partial.highContrast === "boolean" ? partial.highContrast : DEFAULT_SETTINGS.highContrast,
     screenReaderOptimized:
@@ -158,20 +159,8 @@ export function migrateSettings(raw: unknown): AppSettings {
 }
 
 export const FONT_FAMILY_OPTIONS: { value: string; label: string }[] = [
-  {
-    value: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
-    label: "系统默认"
-  },
-  {
-    value: '"Inter", ui-sans-serif, system-ui, sans-serif',
-    label: "Inter"
-  },
-  {
-    value: '"Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif',
-    label: "Noto Sans SC (思源黑体)"
-  },
-  {
-    value: '"LXGW WenKai", "PingFang SC", sans-serif',
-    label: "霞鹜文楷"
-  }
+  { value: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif', label: "系统默认" },
+  { value: '"Inter", ui-sans-serif, system-ui, sans-serif', label: "Inter" },
+  { value: '"Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif', label: "Noto Sans SC" },
+  { value: '"LXGW WenKai", "PingFang SC", sans-serif', label: "霞鹜文楷" }
 ];

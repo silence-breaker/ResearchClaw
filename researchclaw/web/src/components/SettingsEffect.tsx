@@ -15,42 +15,40 @@ function resolvedTheme(theme: "dark" | "light" | "system"): "dark" | "light" {
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
-// Applies settings to the DOM so every route sees them.
 export function SettingsEffect() {
   const settings = useSettingsStore((s) => s.settings);
+  const preview = useSettingsStore((s) => s.preview);
+
+  // Merge preview over settings so draft changes are visible immediately
+  const effective = { ...settings, ...preview };
 
   useEffect(() => {
     const root = document.documentElement;
-    const effective = resolvedTheme(settings.theme);
+    const theme = resolvedTheme(effective.theme);
 
-    if (effective === "dark") {
+    if (theme === "dark") {
       root.classList.add("dark");
     } else {
       root.classList.remove("dark");
     }
 
-    root.style.setProperty("--rc-font-size", `${settings.fontSize}px`);
-    root.style.setProperty("--rc-font-family", settings.fontFamily);
-    root.style.setProperty("--rc-accent", ACCENT_CSS[settings.accentColor] ?? ACCENT_CSS.blue);
-    root.style.setProperty("--rc-brightness", `${settings.brightness}%`);
+    root.style.setProperty("--rc-font-size", `${effective.fontSize}px`);
+    root.style.setProperty("--rc-font-family", effective.fontFamily);
+    root.style.setProperty("--rc-accent", ACCENT_CSS[effective.accentColor] ?? ACCENT_CSS.blue);
+    root.style.setProperty("--rc-brightness", `${effective.brightness}%`);
+    root.style.setProperty("--rc-bg", effective.backgroundColor);
+    root.style.setProperty("--rc-chat-bg", effective.chatColor);
+    root.style.setProperty("--rc-code-bg", effective.codeColor);
 
     const densityMap = { compact: "0.75", comfortable: "1", spacious: "1.25" };
-    root.style.setProperty("--rc-density", densityMap[settings.density] ?? "1");
+    root.style.setProperty("--rc-density", densityMap[effective.density] ?? "1");
 
-    // Model colors as CSS custom properties for easy consumption
-    Object.entries(settings.modelColors).forEach(([model, color]) => {
-      root.style.setProperty(`--rc-model-${model}`, color);
-    });
-
-    // Accessibility flags
-    root.classList.toggle("rc-reduce-motion", settings.reduceMotion);
-    root.classList.toggle("rc-high-contrast", settings.highContrast);
-    root.classList.toggle("rc-screen-reader", settings.screenReaderOptimized);
-    root.classList.toggle("rc-focus-indicator", settings.focusIndicator);
-
-    // Night mode
-    root.classList.toggle("rc-night-mode", settings.nightMode);
-  }, [settings]);
+    root.classList.toggle("rc-reduce-motion", effective.reduceMotion);
+    root.classList.toggle("rc-high-contrast", effective.highContrast);
+    root.classList.toggle("rc-screen-reader", effective.screenReaderOptimized);
+    root.classList.toggle("rc-focus-indicator", effective.focusIndicator);
+    root.classList.toggle("rc-night-mode", effective.nightMode);
+  }, [effective]);
 
   return null;
 }
