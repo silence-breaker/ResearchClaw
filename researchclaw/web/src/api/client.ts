@@ -85,3 +85,17 @@ export function advancePhase(projectId: string): Promise<unknown> {
 export function recoverProject(projectId: string, args: { to?: string }): Promise<unknown> {
   return postJson(`/projects/${projectId}/recover`, { to: args.to });
 }
+
+// --- project management (archive = soft delete; delete = permanent) ---------
+
+export function archiveProject(projectId: string): Promise<unknown> {
+  return postJson(`/projects/${projectId}/archive`);
+}
+
+export function unarchiveProject(projectId: string): Promise<unknown> {
+  return postJson(`/projects/${projectId}/unarchive`);
+}
+
+export function deleteProject(projectId: string): Promise<unknown> {
+  return postJson(`/projects/${projectId}/delete`);
+}

@@ -275,3 +275,22 @@ test("keyword-detector trigger can bootstrap without a topic", async () => {
   assert.equal(state.phase, "intake");
   assert.equal(state.pending_human_actions[0].type, "provide_research_direction");
 });
+
+test("providing a research direction unsticks an intake project (panel re-entry path)", async () => {
+  const { store, orchestrator } = createTempHarness();
+  const payload = {
+    ...readJsonUrl(new URL("../../fixtures/openclaw/keyword-detector.json", import.meta.url)),
+    context: { sessionId: "sess_stuck", projectPath: "/home/wj/openclaw", prompt: "start researchclaw" },
+    instruction: "start researchclaw"
+  };
+  await handleOpenClawPayload({ payload, store, orchestrator });
+  assert.equal(store.readState("proj_demo_001").phase, "intake");
+
+  // Same call the panel's intake input makes: re-run /start with a direction.
+  await orchestrator.startFromText("proj_demo_001", "Explore retrieval reranking");
+
+  const after = store.readState("proj_demo_001");
+  assert.equal(after.phase, "contract_review");
+  assert.ok(after.current.contract_artifact_ref);
+  assert.equal(after.pending_human_actions[0].type, "approve_or_revise");
+});

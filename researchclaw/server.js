@@ -173,6 +173,27 @@ export function createResearchServer({ store, orchestrator, eventBus = null, web
       return;
     }
 
+    const archiveMatch = url.pathname.match(/^\/projects\/([^/]+)\/archive$/);
+    if (req.method === "POST" && archiveMatch) {
+      store.archiveProject(archiveMatch[1]);
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+
+    const unarchiveMatch = url.pathname.match(/^\/projects\/([^/]+)\/unarchive$/);
+    if (req.method === "POST" && unarchiveMatch) {
+      store.unarchiveProject(unarchiveMatch[1]);
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+
+    const deleteMatch = url.pathname.match(/^\/projects\/([^/]+)\/delete$/);
+    if (req.method === "POST" && deleteMatch) {
+      store.deleteProject(deleteMatch[1]);
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+
     const streamMatch = url.pathname.match(/^\/projects\/([^/]+)\/stream$/);
     if (req.method === "GET" && streamMatch) {
       const projectId = streamMatch[1];

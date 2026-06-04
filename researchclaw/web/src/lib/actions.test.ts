@@ -53,6 +53,15 @@ describe("deriveActions", () => {
     });
   });
 
+  test("provide_research_direction yields a provide_direction action (unsticks intake)", () => {
+    const pending: PendingAction[] = [
+      { type: "provide_research_direction", target: "intake", label: "Enter research direction" }
+    ];
+    const actions = deriveActions(pending);
+    expect(actions).toHaveLength(1);
+    expect(actions[0].kind).toBe("provide_direction");
+  });
+
   test("next_human_action yields a display-only note with the description as label", () => {
     const pending: PendingAction[] = [
       { type: "next_human_action", description: "Confirm baseline dataset license." }

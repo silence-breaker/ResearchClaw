@@ -147,6 +147,45 @@ test("GET /evidence returns real claim->artifact mapping mid-pipeline", async ()
   }
 });
 
+test("archive / unarchive endpoints toggle the listing flag", async () => {
+  const server = await startTestServer();
+  try {
+    await postJson(server.baseUrl, "/projects/proj_arch/start", {
+      research_direction: "Explore retrieval reranking"
+    });
+
+    let res = await postJson(server.baseUrl, "/projects/proj_arch/archive", {});
+    assert.equal(res.status, 200);
+    assert.equal(res.body.ok, true);
+    let list = await getJson(server.baseUrl, "/projects");
+    assert.equal(list.body.projects.find((p) => p.project_id === "proj_arch").archived, true);
+
+    await postJson(server.baseUrl, "/projects/proj_arch/unarchive", {});
+    list = await getJson(server.baseUrl, "/projects");
+    assert.equal(list.body.projects.find((p) => p.project_id === "proj_arch").archived, false);
+  } finally {
+    await server.close();
+  }
+});
+
+test("delete endpoint permanently removes a project", async () => {
+  const server = await startTestServer();
+  try {
+    await postJson(server.baseUrl, "/projects/proj_del/start", {
+      research_direction: "Explore retrieval reranking"
+    });
+
+    const res = await postJson(server.baseUrl, "/projects/proj_del/delete", {});
+    assert.equal(res.status, 200);
+    assert.equal(res.body.ok, true);
+
+    const list = await getJson(server.baseUrl, "/projects");
+    assert.equal(list.body.projects.some((p) => p.project_id === "proj_del"), false);
+  } finally {
+    await server.close();
+  }
+});
+
 function parseSseFrame(frame) {
   let eventName = "message";
   const dataLines = [];

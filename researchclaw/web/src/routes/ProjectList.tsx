@@ -1,8 +1,15 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
-import { fetchProjects, startProject } from "../api/client";
-import { makeProjectId } from "../lib/project";
+import {
+  archiveProject,
+  deleteProject,
+  fetchProjects,
+  startProject,
+  unarchiveProject
+} from "../api/client";
+import { makeProjectId, splitProjects } from "../lib/project";
+import { ConfirmButton } from "../components/ConfirmButton";
 import type { ProjectSummary } from "../api/types";
 
 function statusLabel(p: ProjectSummary): { text: string; cls: string } {
@@ -66,8 +73,62 @@ function NewProjectForm() {
   );
 }
 
+function useProjectMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (run: () => Promise<unknown>) => run(),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["projects"] })
+  });
+}
+
+function ActiveItem({ p, busy, onArchive }: { p: ProjectSummary; busy: boolean; onArchive: () => void }) {
+  const s = statusLabel(p);
+  return (
+    <li className="flex items-center justify-between rounded-lg border border-panel-border bg-panel-surface px-4 py-3 hover:border-accent">
+      <Link to={`/panel/${p.project_id}`} className="min-w-0 flex-1">
+        <div className="truncate text-sm text-panel-text">{p.project_id}</div>
+        <div className="text-xs text-panel-muted">{new Date(p.updated_at).toLocaleString()}</div>
+      </Link>
+      <div className="ml-3 flex shrink-0 items-center gap-2">
+        <span className={`text-xs ${s.cls}`}>{s.text}</span>
+        <ConfirmButton label="归档" confirmLabel="确认归档?" disabled={busy} onConfirm={onArchive} />
+      </div>
+    </li>
+  );
+}
+
+function ArchivedItem({
+  p,
+  busy,
+  onRestore,
+  onDelete
+}: {
+  p: ProjectSummary;
+  busy: boolean;
+  onRestore: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <li className="flex items-center justify-between rounded-lg border border-panel-border bg-panel-bg px-4 py-2.5">
+      <div className="min-w-0">
+        <div className="truncate text-sm text-panel-muted">{p.project_id}</div>
+        <div className="text-xs text-panel-muted/70">{new Date(p.updated_at).toLocaleString()}</div>
+      </div>
+      <div className="ml-3 flex shrink-0 items-center gap-2">
+        <ConfirmButton label="恢复" confirmLabel="确认恢复?" disabled={busy} onConfirm={onRestore} />
+        <ConfirmButton label="彻底删除" confirmLabel="不可恢复，确认删除?" danger disabled={busy} onConfirm={onDelete} />
+      </div>
+    </li>
+  );
+}
+
 export function ProjectList() {
   const query = useQuery({ queryKey: ["projects"], queryFn: fetchProjects });
+  const mutation = useProjectMutation();
+  const busy = mutation.isPending;
+  const [showArchived, setShowArchived] = useState(false);
+
+  const { active, archived } = splitProjects(query.data ?? []);
 
   return (
     <div className="mx-auto max-w-3xl p-8">
@@ -80,25 +141,48 @@ export function ProjectList() {
       {query.isError && <p className="mt-6 text-accent-red">无法加载项目（后端是否在 :8787 运行？）。</p>}
 
       <ul className="mt-6 space-y-2">
-        {query.data?.length === 0 && <li className="text-panel-muted">暂无项目。</li>}
-        {query.data?.map((p) => {
-          const s = statusLabel(p);
-          return (
-            <li key={p.project_id}>
-              <Link
-                to={`/panel/${p.project_id}`}
-                className="flex items-center justify-between rounded-lg border border-panel-border bg-panel-surface px-4 py-3 hover:border-accent"
-              >
-                <div>
-                  <div className="text-sm text-panel-text">{p.project_id}</div>
-                  <div className="text-xs text-panel-muted">{new Date(p.updated_at).toLocaleString()}</div>
-                </div>
-                <span className={`text-xs ${s.cls}`}>{s.text}</span>
-              </Link>
-            </li>
-          );
-        })}
+        {active.length === 0 && !query.isLoading && <li className="text-panel-muted">暂无活跃项目。</li>}
+        {active.map((p) => (
+          <ActiveItem
+            key={p.project_id}
+            p={p}
+            busy={busy}
+            onArchive={() => mutation.mutate(() => archiveProject(p.project_id))}
+          />
+        ))}
       </ul>
+
+      {archived.length > 0 && (
+        <div className="mt-6">
+          <button
+            type="button"
+            onClick={() => setShowArchived((v) => !v)}
+            className="text-sm text-panel-muted hover:text-panel-text"
+          >
+            {showArchived ? "▾" : "▸"} 已归档（{archived.length}）
+          </button>
+          {showArchived && (
+            <>
+              <p className="mt-1 text-xs text-panel-muted/70">归档只是隐藏，文件仍保留，可恢复；「彻底删除」不可恢复。</p>
+              <ul className="mt-2 space-y-2">
+                {archived.map((p) => (
+                  <ArchivedItem
+                    key={p.project_id}
+                    p={p}
+                    busy={busy}
+                    onRestore={() => mutation.mutate(() => unarchiveProject(p.project_id))}
+                    onDelete={() => mutation.mutate(() => deleteProject(p.project_id))}
+                  />
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
+
+      {mutation.isError && (
+        <p className="mt-3 text-sm text-accent-red">操作失败：{(mutation.error as Error).message}</p>
+      )}
     </div>
   );
 }

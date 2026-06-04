@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { createInitialState } from "../engine/state.js";
 import { makeId, nowIso, redactSecrets, slugify } from "../util.js";
@@ -109,8 +109,41 @@ export class FileEvidenceStore {
         project_id: projectId,
         phase: state.phase,
         updated_at: state.updated_at,
-        pending_human_actions: state.pending_human_actions
+        pending_human_actions: state.pending_human_actions,
+        archived: Boolean(state.archived)
       };
     });
+  }
+
+  // --- project management (meta ops; do NOT touch the research state machine) ---
+
+  archiveProject(projectId) {
+    const state = this.readState(projectId);
+    state.archived = true;
+    state.archived_at = nowIso();
+    this.writeState(state);
+  }
+
+  unarchiveProject(projectId) {
+    const state = this.readState(projectId);
+    delete state.archived;
+    delete state.archived_at;
+    this.writeState(state);
+  }
+
+  // Permanently removes a project directory. Guards against ids that would
+  // escape the projects/ root (path traversal).
+  deleteProject(projectId) {
+    // project ids are single slugified segments — anything with a path separator
+    // or dot-segment is rejected before it can touch the filesystem.
+    if (!projectId || projectId.includes("/") || projectId.includes("\\") || projectId === "." || projectId === "..") {
+      throw new Error(`invalid project id: ${projectId}`);
+    }
+    const projectsRoot = resolve(this.rootDir, "projects");
+    const dir = resolve(projectsRoot, projectId);
+    if (dir !== join(projectsRoot, projectId) || !dir.startsWith(projectsRoot + "/")) {
+      throw new Error(`invalid project id: ${projectId}`);
+    }
+    rmSync(dir, { recursive: true, force: true });
   }
 }

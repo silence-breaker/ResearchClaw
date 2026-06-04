@@ -22,6 +22,7 @@ export type PanelAction =
   | { kind: "revise"; label: string; artifactId?: string; artifactRef?: string }
   | { kind: "advance"; label: string; phase: ResearchPhase }
   | { kind: "recover"; label: string; to?: ResearchPhase; errors: string[] }
+  | { kind: "provide_direction"; label: string }
   | { kind: "note"; label: string };
 
 // Translates the engine's pending_human_actions into panel buttons. One
@@ -49,12 +50,19 @@ export function deriveActions(pending: PendingAction[]): PanelAction[] {
         actions.push({ kind: "recover", label, to, errors });
         break;
       }
+      case "provide_research_direction": {
+        // An intake project awaiting its research direction (e.g. created by the
+        // OpenClaw hook without a topic). Render an input so the human can supply
+        // it and unstick the pipeline.
+        actions.push({ kind: "provide_direction", label: "输入研究方向以继续" });
+        break;
+      }
       case "next_human_action": {
         actions.push({ kind: "note", label: (p as { description: string }).description });
         break;
       }
       default:
-        // provide_research_direction / unknown engine actions: not part of M1.3.
+        // unknown engine actions (hook-triggered misc): dropped.
         break;
     }
   }

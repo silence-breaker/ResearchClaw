@@ -93,6 +93,7 @@ export interface ProjectSummary {
   phase: ResearchPhase;
   updated_at: string;
   pending_human_actions: PendingAction[];
+  archived?: boolean;
 }
 
 export type ArtifactType =

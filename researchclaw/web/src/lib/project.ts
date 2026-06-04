@@ -1,3 +1,5 @@
+import type { ProjectSummary } from "../api/types";
+
 const MAX_SLUG = 40;
 
 // Turns a human research-direction name into a filesystem-safe project id of
@@ -11,4 +13,17 @@ export function makeProjectId(name: string, suffix: string): string {
     .slice(0, MAX_SLUG)
     .replace(/_+$/g, "");
   return slug ? `proj_${slug}_${suffix}` : `proj_${suffix}`;
+}
+
+// Splits the project list into active vs archived for the two-section view.
+export function splitProjects(summaries: ProjectSummary[]): {
+  active: ProjectSummary[];
+  archived: ProjectSummary[];
+} {
+  const active: ProjectSummary[] = [];
+  const archived: ProjectSummary[] = [];
+  for (const s of summaries) {
+    (s.archived ? archived : active).push(s);
+  }
+  return { active, archived };
 }

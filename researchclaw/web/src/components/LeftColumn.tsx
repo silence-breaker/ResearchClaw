@@ -1,6 +1,9 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { archiveProject } from "../api/client";
 import type { ProjectState, ResearchPhase } from "../api/types";
 import type { StreamStatus } from "../api/useProjectStream";
+import { ConfirmButton } from "./ConfirmButton";
 
 const PHASE_LABEL: Partial<Record<ResearchPhase, string>> = {
   idle: "空闲 / 已完成",
@@ -41,8 +44,18 @@ function isActive(currentPath: string, navPath: string): boolean {
 
 export function LeftColumn({ state, status }: { state?: ProjectState; status?: StreamStatus }) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const currentPath = location.pathname;
   const running = state && state.phase !== "idle" && state.phase !== "blocked";
+
+  const archive = useMutation({
+    mutationFn: (projectId: string) => archiveProject(projectId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      navigate("/");
+    }
+  });
 
   return (
     <aside className="flex w-60 shrink-0 flex-col gap-4 border-r border-panel-border bg-panel-surface p-4">
@@ -110,6 +123,15 @@ export function LeftColumn({ state, status }: { state?: ProjectState; status?: S
         <Link to="/" className="block text-xs text-accent hover:underline">
           ← 返回项目列表
         </Link>
+        {state && (
+          <ConfirmButton
+            label="归档此项目"
+            confirmLabel="确认归档?（可在列表恢复）"
+            disabled={archive.isPending}
+            onConfirm={() => archive.mutate(state.project_id)}
+            className="w-full"
+          />
+        )}
       </div>
     </aside>
   );
