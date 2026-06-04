@@ -7,9 +7,9 @@
 
 ## 当前状态
 
-**阶段**: Step 3 完成 — Settings 状态管理 + 表单绑定已落地
+**阶段**: Step 6 完成 — 8 分类骨架 + 辅助功能字段已落地
 
-**一句话**: Zustand store + localStorage 持久化已接入；通用设置表单可控；保存/取消/恢复默认可用；主题/字体/密度/强调色通过 CSS 变量实时生效；typecheck + 30/30 测试通过。
+**一句话**: 设置页重排为 8 个一级分类（通用/模型/通知/个人资料与账户/外观/安全/辅助功能/系统）；新增 4 个辅助功能字段（减少动画/高对比度/屏幕阅读器优化/焦点指示器）并接入 CSS；外观设置独立为分类；系统分类含版本/缓存清理/恢复默认；typecheck + 30/30 测试通过。
 
 ---
 
@@ -29,6 +29,11 @@
 | Step 4 | SettingsPage 布局（左分类菜单 + 右内容卡片） | `routes/SettingsPage.tsx` | 浏览器手验 |
 | Step 5 | GeneralSettings UI（语言/时区/日期/主题/字体/密度/代码字体/强调色） | `routes/SettingsPage.tsx` | 浏览器手验 |
 | Step 6 | 模型配置/通知/集成/账户占位 | `routes/SettingsPage.tsx` | — |
+| Step 7 | 重构为 8 个一级分类 | `routes/SettingsPage.tsx` | 浏览器手验 |
+| Step 7 | 新增辅助功能字段 + Toggle UI | `lib/settings.ts` + `SettingsPage.tsx` | `settings.test.ts` 4/4 |
+| Step 7 | 外观设置独立分类 | `routes/SettingsPage.tsx` | 浏览器手验 |
+| Step 7 | 系统分类（版本/缓存/恢复默认/导入导出占位） | `routes/SettingsPage.tsx` | 浏览器手验 |
+| Step 7 | SettingsEffect 接入辅助功能 CSS 类 | `components/SettingsEffect.tsx` + `tailwind.css` | 浏览器手验 |
 
 ---
 
@@ -46,7 +51,7 @@
 - [x] Step 4: SettingsPage 布局（左菜单 + 右内容）
 - [x] Step 5: GeneralSettings UI 骨架
 - [x] Step 6: 模型配置占位 + 其他分类占位
-- [ ] Step 7: 回归测试 + push WHC（typecheck + 30/30 已通过，待 push）
+- [x] Step 7: 8 分类重构 + 辅助功能字段 + push WHC
 
 ---
 
