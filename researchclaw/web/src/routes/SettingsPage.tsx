@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { LeftColumn } from "../components/LeftColumn";
 import { ProfileSettings } from "../components/ProfileSettings";
+import { ModelSettings } from "../components/ModelSettings";
 import { useSettingsStore } from "../stores/settings";
 import { FONT_FAMILY_OPTIONS, type AppSettings } from "../lib/settings";
 
@@ -17,7 +18,7 @@ const CATEGORIES: CategoryDef[] = [
   { id: "profile", label: "个人资料与账户", icon: "👤", description: "管理头像、昵称、账户切换和登出" },
   { id: "general", label: "通用", icon: "⚙️", description: "语言、时区、文件路径、自动保存、启动选项" },
   { id: "appearance", label: "外观", icon: "🎨", description: "主题、字体、密度、代码字体、强调色" },
-  { id: "model", label: "模型", icon: "🖥️", description: "默认模型、Token 限制、工具白名单" },
+  { id: "model", label: "模型", icon: "🖥️", description: "模型状态监控、Token 限制、强制停止" },
   { id: "notifications", label: "通知", icon: "🔔", description: "邮件提醒、浏览器通知、静音时段" },
   { id: "security", label: "安全", icon: "🔒", description: "API 密钥、双因素认证、会话管理" },
   { id: "accessibility", label: "辅助功能", icon: "♿", description: "减少动画、高对比度、屏幕阅读器优化" },
@@ -124,7 +125,7 @@ export function SettingsPage() {
             {activeDef && <Breadcrumb label={activeDef.label} onBack={goHome} />}
             <div className="rounded-lg border border-panel-border bg-panel-surface p-5">
               {activeCategory === "general" && <GeneralSettings />}
-              {activeCategory === "model" && <PlaceholderSettings description="模型选择、Token 限制、工具白名单等配置将在 M2 接入真实 CLI 后开放。" />}
+              {activeCategory === "model" && <ModelSettings />}
               {activeCategory === "notifications" && <PlaceholderSettings />}
               {activeCategory === "profile" && <ProfileSettings />}
               {activeCategory === "appearance" && <AppearanceSettings />}
