@@ -1,0 +1,11 @@
+{"type":"system","subtype":"hook_started","hook_name":"SessionStart:startup","session_id":"sess_demo"}
+{"type":"system","subtype":"hook_response","hook_name":"SessionStart:startup","exit_code":0,"outcome":"success","session_id":"sess_demo"}
+{"type":"system","subtype":"init","session_id":"sess_demo","model":"claude-haiku-4-5","permissionMode":"default","apiKeySource":"none","tools":["Read","Write","WebSearch"]}
+{"type":"system","subtype":"thinking_tokens","tokens":128,"session_id":"sess_demo"}
+{"type":"system","subtype":"thinking_tokens","tokens":256,"session_id":"sess_demo"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"thinking","thinking":"Plan the contract fields before writing."}],"usage":{"input_tokens":0,"output_tokens":74}},"session_id":"sess_demo"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Drafting a machine-checkable research contract for the given direction."}],"usage":{"input_tokens":1180,"output_tokens":36}},"session_id":"sess_demo"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu_1","name":"Write","input":{"file_path":"out.json"}}],"usage":{"input_tokens":0,"output_tokens":402}},"session_id":"sess_demo"}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu_1","content":"File created successfully at out.json"}]},"session_id":"sess_demo"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Done. Research contract written to ./out.json."}],"usage":{"input_tokens":0,"output_tokens":18}},"session_id":"sess_demo"}
+{"type":"result","subtype":"success","is_error":false,"duration_ms":4200,"num_turns":3,"session_id":"sess_demo","total_cost_usd":0.0021,"usage":{"input_tokens":1500,"cache_creation_input_tokens":40885,"cache_read_input_tokens":36748,"output_tokens":520,"service_tier":"standard"}}

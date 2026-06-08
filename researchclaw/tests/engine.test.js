@@ -6,6 +6,170 @@ import { MockModelAdapter } from "../adapters/mock.js";
 import { readJsonUrl } from "../util.js";
 import { ResearchOrchestrator } from "../engine/orchestrator.js";
 import { FileEvidenceStore } from "../evidence/store.js";
+import { CostTracker } from "../engine/cost.js";
+import { createRoutingAdapter } from "../adapters/route.js";
+
+const cliOutFixture = () => readJsonUrl(new URL("../../fixtures/cli/contract-draft.out.json", import.meta.url));
+
+// A stand-in for ClaudeCodeAdapter that returns the claude-shaped result
+// (output + usage + raw) without spawning anything. `fail` flips it to an error
+// so the routing adapter degrades to mock.
+class StubClaudeAdapter {
+  name = "claude";
+  available = true;
+  fail = false;
+  async run(request) {
+    if (this.fail) {
+      return { ok: false, adapter: "claude", error: { code: "schema_violation", message: "bad out.json", retryable: true } };
+    }
+    const output = cliOutFixture();
+    output.project_id = request.project_id;
+    return {
+      ok: true,
+      adapter: "claude",
+      output,
+      usage: { input_tokens: 1500, output_tokens: 520, model: "claude-haiku-4-5", turns: 3, duration_ms: 4200 },
+      raw: {
+        transcript: "line-1\nline-2\nline-3",
+        summary: { model: "claude-haiku-4-5", time: "2026-06-04T00:00:00.000Z", role: "规划", summary: "Drafted contract", artifact_refs: [] }
+      }
+    };
+  }
+}
+
+function claudeHarness({ fail = false } = {}) {
+  const primary = new StubClaudeAdapter();
+  primary.fail = fail;
+  const costTracker = new CostTracker();
+  const adapter = createRoutingAdapter({
+    phases: ["contract_draft"],
+    primary,
+    fallback: new MockModelAdapter(),
+    costTracker
+  });
+  return { ...createTempHarness(adapter, { costTracker }), costTracker };
+}
+
+test("a claude-produced contract_draft persists usage into state.usage", async () => {
+  const { store, orchestrator } = claudeHarness();
+  await orchestrator.startFromText("proj_demo_001", "improve retrieval reranking");
+  const state = store.readState("proj_demo_001");
+  assert.equal(state.phase, "contract_review");
+  assert.ok(state.usage, "state.usage must be populated by the cost tracker");
+  assert.equal(state.usage.input_tokens, 1500);
+  assert.equal(state.usage.output_tokens, 520);
+  assert.equal(state.usage.cli_calls, 1);
+  assert.ok(state.usage.est_cost_usd > 0);
+});
+
+test("a claude-produced contract_draft lands a raw_log transcript artifact", async () => {
+  const { store, orchestrator } = claudeHarness();
+  await orchestrator.startFromText("proj_demo_001", "improve retrieval reranking");
+  const state = store.readState("proj_demo_001");
+
+  const contract = store.readArtifact("proj_demo_001", state.current.contract_artifact_ref);
+  assert.equal(contract.producer.adapter, "claude");
+
+  const rawRefs = state.current.raw_log_artifact_refs ?? [];
+  assert.equal(rawRefs.length, 1);
+  const rawLog = store.readArtifact("proj_demo_001", rawRefs[0]);
+  assert.equal(rawLog.type, "raw_log");
+  assert.equal(rawLog.producer.adapter, "claude");
+  assert.equal(rawLog.content.role, "规划");
+  assert.ok(rawLog.content.transcript_ref, "transcript should be saved as a referenced raw payload");
+});
+
+// --- async start/revise (non-blocking dashboard path) ---------------------
+
+class CountingMockAdapter extends MockModelAdapter {
+  constructor() {
+    super();
+    this.draftCalls = 0;
+  }
+  async run(request) {
+    if (request.phase === "contract_draft") this.draftCalls += 1;
+    return super.run(request);
+  }
+}
+
+class ThrowingDraftAdapter extends MockModelAdapter {
+  async run(request) {
+    if (request.phase === "contract_draft") {
+      return { ok: false, adapter: "mock", error: { code: "boom", message: "draft exploded", retryable: false } };
+    }
+    return super.run(request);
+  }
+}
+
+test("beginDraftFromText returns a running snapshot without drafting yet", async () => {
+  const { store, orchestrator } = createTempHarness();
+  const result = await orchestrator.beginDraftFromText("proj_async", "Explore retrieval reranking");
+  assert.equal(result.phase, "contract_draft");
+  assert.equal(result.needs_draft, true);
+  const state = store.readState("proj_async");
+  assert.equal(state.phase, "contract_draft");
+  assert.equal(state.pending_human_actions[0].type, "phase_running");
+  assert.equal(state.current.contract_artifact_ref, undefined, "no contract should exist before executeContractRun");
+});
+
+test("executeContractRun completes the draft started by beginDraftFromText", async () => {
+  const { store, orchestrator } = createTempHarness();
+  await orchestrator.beginDraftFromText("proj_async", "Explore retrieval reranking");
+  await orchestrator.executeContractRun("proj_async");
+  const state = store.readState("proj_async");
+  assert.equal(state.phase, "contract_review");
+  assert.ok(state.current.contract_artifact_ref);
+  assert.equal(state.pending_human_actions[0].type, "approve_or_revise");
+});
+
+test("executeContractRun runs the workflow only once under concurrent calls", async () => {
+  const adapter = new CountingMockAdapter();
+  const { orchestrator } = createTempHarness(adapter);
+  await orchestrator.beginDraftFromText("proj_async", "Explore retrieval reranking");
+  await Promise.all([
+    orchestrator.executeContractRun("proj_async"),
+    orchestrator.executeContractRun("proj_async")
+  ]);
+  assert.equal(adapter.draftCalls, 1, "inflight guard must prevent a double run");
+});
+
+test("a draft workflow failure lands the project in blocked, not a crash", async () => {
+  const { store, orchestrator } = createTempHarness(new ThrowingDraftAdapter());
+  await orchestrator.beginDraftFromText("proj_async", "Explore retrieval reranking");
+  await orchestrator.executeContractRun("proj_async");
+  const state = store.readState("proj_async");
+  assert.equal(state.phase, "blocked");
+  assert.ok((state.block.errors || []).some((e) => e.includes("draft exploded")));
+});
+
+test("beginRevise + executeContractRun produces a revised version asynchronously", async () => {
+  const { store, orchestrator } = createTempHarness();
+  await orchestrator.startFromText("proj_async", "Explore retrieval reranking");
+  const before = store.readArtifact("proj_async", store.readState("proj_async").current.contract_artifact_ref).content;
+
+  const running = await orchestrator.beginRevise("proj_async", { target: "contract", feedback: "Add a latency failure signal." });
+  assert.equal(running.needs_draft, true);
+  assert.equal(store.readState("proj_async").pending_human_actions[0].type, "phase_running");
+
+  await orchestrator.executeContractRun("proj_async");
+  const after = store.readState("proj_async");
+  assert.equal(after.phase, "contract_review");
+  const revised = store.readArtifact("proj_async", after.current.contract_artifact_ref).content;
+  assert.equal(revised.version, before.version + 1);
+});
+
+test("a failed claude run degrades to mock honestly and counts the failure", async () => {
+  const { store, orchestrator } = claudeHarness({ fail: true });
+  await orchestrator.startFromText("proj_demo_001", "improve retrieval reranking");
+  const state = store.readState("proj_demo_001");
+  assert.equal(state.phase, "contract_review");
+
+  const contract = store.readArtifact("proj_demo_001", state.current.contract_artifact_ref);
+  assert.equal(contract.producer.adapter, "mock", "degraded product must be labelled mock");
+  assert.equal(state.usage.cli_failures, 1);
+  // mock fallback produced no transcript → no raw_log landed.
+  assert.equal((state.current.raw_log_artifact_refs ?? []).length, 0);
+});
 
 class BadBaselineAdapter extends MockModelAdapter {
   outputFor(request) {

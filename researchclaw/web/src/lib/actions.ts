@@ -23,6 +23,7 @@ export type PanelAction =
   | { kind: "advance"; label: string; phase: ResearchPhase }
   | { kind: "recover"; label: string; to?: ResearchPhase; errors: string[] }
   | { kind: "provide_direction"; label: string }
+  | { kind: "running"; label: string }
   | { kind: "note"; label: string };
 
 // Translates the engine's pending_human_actions into panel buttons. One
@@ -55,6 +56,12 @@ export function deriveActions(pending: PendingAction[]): PanelAction[] {
         // OpenClaw hook without a topic). Render an input so the human can supply
         // it and unstick the pipeline.
         actions.push({ kind: "provide_direction", label: "输入研究方向以继续" });
+        break;
+      }
+      case "phase_running": {
+        // The engine is running a phase (e.g. Claude drafting the contract) in the
+        // background. Render a display-only "running" indicator, not a button.
+        actions.push({ kind: "running", label: (p as { label?: string }).label ?? "运行中…" });
         break;
       }
       case "next_human_action": {

@@ -76,6 +76,50 @@ test("orchestrator emits a full-state snapshot after a state write", async () =>
   assert.ok(Array.isArray(latest.data.contract_versions), "snapshot carries contract_versions");
 });
 
+test("emit buffers cli_chunk events so a late subscriber can replay them", () => {
+  const bus = new EventBus();
+  bus.emit("proj_a", { type: "cli_chunk", data: { text: "a" } });
+  bus.emit("proj_a", { type: "cli_chunk", data: { text: "b" } });
+
+  const replayed = [];
+  bus.replayCliChunks("proj_a", (event) => replayed.push(event));
+  assert.equal(replayed.length, 2);
+  assert.equal(replayed[0].data.text, "a");
+  assert.equal(replayed[1].data.text, "b");
+});
+
+test("only cli_chunk events are buffered (not snapshots)", () => {
+  const bus = new EventBus();
+  bus.emit("proj_a", { type: "snapshot", data: { phase: "intake" } });
+  bus.emit("proj_a", { type: "cli_chunk", data: { text: "a" } });
+
+  const replayed = [];
+  bus.replayCliChunks("proj_a", (event) => replayed.push(event));
+  assert.equal(replayed.length, 1);
+  assert.equal(replayed[0].type, "cli_chunk");
+});
+
+test("clearCliChunks empties a project's buffer (called at a new run start)", () => {
+  const bus = new EventBus();
+  bus.emit("proj_a", { type: "cli_chunk", data: { text: "old" } });
+  bus.clearCliChunks("proj_a");
+
+  const replayed = [];
+  bus.replayCliChunks("proj_a", (event) => replayed.push(event));
+  assert.equal(replayed.length, 0);
+});
+
+test("the cli_chunk buffer is capped (drops oldest)", () => {
+  const bus = new EventBus();
+  for (let i = 0; i < 250; i += 1) {
+    bus.emit("proj_a", { type: "cli_chunk", data: { n: i } });
+  }
+  const replayed = [];
+  bus.replayCliChunks("proj_a", (event) => replayed.push(event));
+  assert.ok(replayed.length <= 200, "buffer must be capped");
+  assert.equal(replayed.at(-1).data.n, 249, "newest is kept");
+});
+
 test("orchestrator works without an event bus injected", async () => {
   const rootDir = mkdtempSync(join(tmpdir(), "researchclaw-noevt-"));
   const store = new FileEvidenceStore({ rootDir });

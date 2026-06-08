@@ -7,7 +7,7 @@ import { ArtifactDetailDrawer } from "../components/ArtifactDetailDrawer";
 
 export function Panel() {
   const { projectId } = useParams<{ projectId: string }>();
-  const { state, status, error } = useProjectStream(projectId);
+  const { state, status, error, cliChunks } = useProjectStream(projectId);
 
   if (!state) {
     return (
@@ -21,7 +21,7 @@ export function Panel() {
     <div className="flex min-h-screen">
       <LeftColumn state={state} status={status} />
       <CenterColumn state={state} />
-      <RightColumn state={state} />
+      <RightColumn state={state} cliChunks={cliChunks} />
       {projectId && <ArtifactDetailDrawer projectId={projectId} />}
     </div>
   );

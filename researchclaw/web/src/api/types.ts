@@ -43,6 +43,7 @@ export type PendingAction =
       label: string;
     }
   | { type: "run_phase"; phase: ResearchPhase; label: string }
+  | { type: "phase_running"; phase: ResearchPhase; label: string }
   | {
       type: "revise_required";
       phase: ResearchPhase;
@@ -73,6 +74,17 @@ export interface ProjectBlock {
   errors: string[];
 }
 
+// Session-level CLI usage, mirrored from the backend CostTracker snapshot. Rides
+// the SSE snapshot (state.usage); absent until a real CLI run happens.
+export interface UsageSummary {
+  input_tokens: number;
+  output_tokens: number;
+  est_cost_usd: number;
+  cli_calls: number;
+  cli_failures: number;
+  by_phase?: Record<string, { input_tokens: number; output_tokens: number; cli_calls: number; cli_failures: number }>;
+}
+
 export interface ProjectState {
   state_version: number;
   project_id: string;
@@ -86,6 +98,29 @@ export interface ProjectState {
   contract_versions: { version: number; artifact_ref: string; status: string }[];
   latest_signal_id?: string;
   block?: ProjectBlock;
+  usage?: UsageSummary;
+}
+
+// One process-feed event from a CLI run (SSE `cli_chunk`). Process channel only —
+// never a conclusion (两通道红线). `degraded` marks an auto-fallback to mock.
+export interface CliChunk {
+  phase: string;
+  role: string;
+  text?: string;
+  tool?: string;
+  ts: string;
+  degraded?: boolean;
+}
+
+// Defensive shape for a CLI transcript raw_log artifact's content. Every field is
+// optional — render must tolerate older/leaner raw_logs.
+export interface CliRawLogSummary {
+  model?: string;
+  time?: string;
+  role?: string;
+  summary?: string;
+  artifact_refs?: string[];
+  transcript_ref?: string;
 }
 
 export interface ProjectSummary {

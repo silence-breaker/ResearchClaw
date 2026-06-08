@@ -3,11 +3,65 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, extname, join, normalize, resolve } from "node:path";
 import { URL, fileURLToPath } from "node:url";
 import { MockModelAdapter } from "./adapters/mock.js";
+import { ClaudeCodeAdapter } from "./adapters/claudeCode.js";
+import { resolveClaudeModel } from "./adapters/claudeConfig.js";
+import { createRoutingAdapter } from "./adapters/route.js";
+import { CostTracker } from "./engine/cost.js";
 import { EventBus } from "./engine/events.js";
 import { ResearchOrchestrator } from "./engine/orchestrator.js";
 import { FileEvidenceStore } from "./evidence/store.js";
 import { handleOpenClawPayload } from "./gateway.js";
 import { renderIndexPage, renderPanelPage } from "./ui.js";
+
+// Builds the model adapter wiring from env. Defaults to pure mock (current
+// behaviour, CI-safe, zero model spend). Real Claude Code is opt-in and only
+// for the contract_draft phase in M2; anything else stays on mock. Returns the
+// adapter plus an optional costTracker the orchestrator persists into
+// state.usage. See M2技术路线-后端 §7/§8 and 技术路线指南 §7 (cost is a hard rule).
+function buildAdapter(eventBus) {
+  const enabled = process.env.RESEARCHCLAW_ENABLE_CLAUDE === "1";
+  if (!enabled || !ClaudeCodeAdapter.isAvailable()) {
+    if (enabled) {
+      console.warn("[researchclaw] RESEARCHCLAW_ENABLE_CLAUDE=1 but no `claude` binary found — staying on mock.");
+    }
+    return { adapter: new MockModelAdapter(), costTracker: null };
+  }
+  if (!process.env.ANTHROPIC_API_KEY) {
+    console.warn("[researchclaw] No ANTHROPIC_API_KEY in env — relying on `claude` subscription login; a failed run will degrade to mock.");
+  }
+  // Resolve the Haiku model id (env override → env haiku → ~/.claude/settings.json
+  // haiku → alias). Reading settings.json covers the cc-switch case where the var
+  // is only in claude's config, not the npm-run-dev shell. Never ANTHROPIC_MODEL
+  // (often Opus on a relay) — cost red line.
+  const model = resolveClaudeModel();
+  if (!/haiku/i.test(model)) {
+    console.warn(`[researchclaw] ⚠ non-Haiku model ${model} — Haiku is the cost-safe default; proceed only if intentional.`);
+  }
+  const costTracker = new CostTracker({
+    sessionBudgetUsd: process.env.RESEARCHCLAW_SESSION_BUDGET_USD
+      ? Number(process.env.RESEARCHCLAW_SESSION_BUDGET_USD)
+      : null
+  });
+  const primary = new ClaudeCodeAdapter({
+    eventBus,
+    costTracker,
+    config: {
+      model,
+      maxTurns: process.env.RESEARCHCLAW_MAX_TURNS ? Number(process.env.RESEARCHCLAW_MAX_TURNS) : 20,
+      timeoutMs: process.env.RESEARCHCLAW_TIMEOUT_MS ? Number(process.env.RESEARCHCLAW_TIMEOUT_MS) : 120000,
+      available: true
+    }
+  });
+  const adapter = createRoutingAdapter({
+    phases: ["contract_draft"],
+    primary,
+    fallback: new MockModelAdapter(),
+    costTracker,
+    eventBus
+  });
+  console.log(`[researchclaw] Claude Code enabled for contract_draft (model=${model}).`);
+  return { adapter, costTracker };
+}
 
 function sendJson(res, status, body) {
   res.writeHead(status, {
@@ -135,10 +189,15 @@ export function createResearchServer({ store, orchestrator, eventBus = null, web
     if (req.method === "POST" && startMatch) {
       const body = await readJsonBody(req);
       const researchDirection = body.research_direction || body.userText || body.topic;
-      const result = await orchestrator.startFromText(startMatch[1], researchDirection, {
+      // Return a "running" ack fast; draft the contract in the background so the
+      // panel can open and stream cli_chunk live instead of freezing on submit.
+      const result = await orchestrator.beginDraftFromText(startMatch[1], researchDirection, {
         source: "dashboard"
       });
       sendJson(res, 200, result);
+      if (result.needs_draft) {
+        orchestrator.executeContractRun(startMatch[1]).catch(() => {});
+      }
       return;
     }
 
@@ -160,8 +219,13 @@ export function createResearchServer({ store, orchestrator, eventBus = null, web
     const reviseMatch = url.pathname.match(/^\/projects\/([^/]+)\/revise$/);
     if (req.method === "POST" && reviseMatch) {
       const body = await readJsonBody(req);
-      const result = await orchestrator.revise(reviseMatch[1], body);
+      // Same non-blocking pattern as /start: ack fast, revise in the background
+      // so the open panel streams the revise run live.
+      const result = await orchestrator.beginRevise(reviseMatch[1], body);
       sendJson(res, 200, result);
+      if (result.needs_draft) {
+        orchestrator.executeContractRun(reviseMatch[1]).catch(() => {});
+      }
       return;
     }
 
@@ -207,6 +271,9 @@ export function createResearchServer({ store, orchestrator, eventBus = null, web
       };
       // first frame: the current full state, so a fresh client renders immediately
       writeEvent({ type: "snapshot", data: store.readState(projectId) });
+      // replay recent cli_chunk events: a panel opened right after project
+      // creation missed the live emits from the background draft run.
+      eventBus?.replayCliChunks(projectId, writeEvent);
       const unsubscribe = eventBus
         ? eventBus.subscribe(projectId, writeEvent)
         : () => {};
@@ -253,7 +320,8 @@ if (isMainModule) {
   const port = Number(process.env.RESEARCHCLAW_PORT || 8787);
   const store = new FileEvidenceStore();
   const eventBus = new EventBus();
-  const orchestrator = new ResearchOrchestrator({ store, adapter: new MockModelAdapter(), eventBus });
+  const { adapter, costTracker } = buildAdapter(eventBus);
+  const orchestrator = new ResearchOrchestrator({ store, adapter, eventBus, costTracker });
   const server = createResearchServer({ store, orchestrator, eventBus });
   server.listen(port, host, () => {
     console.log(`ResearchClaw listening on http://${host}:${port}`);

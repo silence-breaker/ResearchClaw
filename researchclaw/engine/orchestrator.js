@@ -1,7 +1,7 @@
 import { approveContract } from "../contract/contract.js";
 import { MockModelAdapter } from "../adapters/mock.js";
 import { createArtifact } from "../evidence/types.js";
-import { makeId, nowIso, publicStateSummary } from "../util.js";
+import { makeId, nowIso, publicStateSummary, redactSecrets } from "../util.js";
 import { runBaselineWorkflow, runReproductionChecklistWorkflow } from "../workflows/baseline.js";
 import { runContractDraftWorkflow } from "../workflows/contractDraft.js";
 import { runIdeaWorkflow } from "../workflows/idea.js";
@@ -61,10 +61,46 @@ function setRunPhaseAction(state, phase) {
 }
 
 export class ResearchOrchestrator {
-  constructor({ store, adapter = new MockModelAdapter(), eventBus = null }) {
+  constructor({ store, adapter = new MockModelAdapter(), eventBus = null, costTracker = null }) {
     this.store = store;
     this.adapter = adapter;
     this.eventBus = eventBus;
+    this.costTracker = costTracker;
+    // Per-project background contract run: promise (re-entrancy guard) + the
+    // pending run context (draft vs revise inputs) set by begin*, read by execute.
+    this.inflight = new Map();
+    this.pendingRun = new Map();
+  }
+
+  // Lands a CLI transcript (process channel) as a raw_log artifact and records
+  // its ref on state. The full transcript is redacted + saved as a raw payload;
+  // the artifact content is the structured summary + a transcript_ref. This is
+  // process transparency only — never a conclusion (两通道红线 §2.1).
+  landCliRawLog(state, raw, phase, sourceRef) {
+    if (!raw) {
+      return;
+    }
+    const transcriptRef = this.store.saveRawPayload(state.project_id, `${phase}-transcript`, {
+      transcript: raw.transcript
+    });
+    const artifact = createArtifact({
+      projectId: state.project_id,
+      phase,
+      type: "raw_log",
+      workflow: "cli_transcript",
+      adapter: "claude",
+      inputRefs: [sourceRef].filter(Boolean),
+      evidenceRefs: [],
+      content: redactSecrets({ ...raw.summary, transcript_ref: transcriptRef })
+    });
+    const ref = this.store.appendArtifact(artifact);
+    state.current.raw_log_artifact_refs = [...(state.current.raw_log_artifact_refs || []), ref];
+  }
+
+  persistUsage(state) {
+    if (this.costTracker) {
+      state.usage = this.costTracker.snapshot(state.project_id);
+    }
   }
 
   emitSnapshot(state) {
@@ -126,9 +162,10 @@ export class ResearchOrchestrator {
     return this.startResearch(state, signal);
   }
 
-  async startResearch(state, signal) {
+  // Intake step: records the manual intake artifact and either marks the project
+  // ready (research direction provided) or awaiting one. Mutates state; no write.
+  _intake(state, signal) {
     const userText = signal.userText?.trim();
-
     state.current = {};
     state.pending_human_actions = [];
     state.phase = "intake";
@@ -148,33 +185,50 @@ export class ResearchOrchestrator {
     });
     const intakeRef = this.store.appendArtifact(intakeArtifact);
     state.current.intake_artifact_ref = intakeRef;
+    state.current.intake_raw_ref = signal.rawPayloadRef;
     if (userText) {
       state.current.research_direction = userText;
       recordPhase(state, "intake", [intakeRef], "pass");
-    } else {
-      state.pending_human_actions = [
-        {
-          type: "provide_research_direction",
-          target: "intake",
-          label: "Enter research direction"
-        }
-      ];
-      recordPhase(state, "intake", [intakeRef], "manual");
-      return this.finish(state, signal, ["researchclaw_panel_ready", "research_direction_required"]);
+      return { ready: true, intakeRef };
     }
+    state.pending_human_actions = [
+      { type: "provide_research_direction", target: "intake", label: "Enter research direction" }
+    ];
+    recordPhase(state, "intake", [intakeRef], "manual");
+    return { ready: false, intakeRef };
+  }
 
-    state.phase = "contract_draft";
-    const draftArtifact = await runContractDraftWorkflow({
+  _runDraftWorkflow(state, { intakeRef, evidenceRef }) {
+    return runContractDraftWorkflow({
       adapter: this.adapter,
       projectId: state.project_id,
-      userText,
+      userText: state.current.research_direction,
       inputRefs: [intakeRef],
-      evidenceRefs: [signal.rawPayloadRef]
+      evidenceRefs: [evidenceRef]
     });
+  }
+
+  _runReviseWorkflow(state, { currentRef, currentContract, feedback }) {
+    return runContractDraftWorkflow({
+      adapter: this.adapter,
+      projectId: state.project_id,
+      userText: state.current.research_direction,
+      previousContract: currentContract,
+      feedback,
+      inputRefs: [currentRef],
+      evidenceRefs: [currentRef]
+    });
+  }
+
+  // Commits a draft/revise workflow result: appends the contract + CLI raw_log,
+  // runs the gate, and transitions to contract_review (pass) or blocked (fail).
+  // Returns true on pass. Mutates state; the caller writes.
+  _commitDraft(state, { contract: draftArtifact, raw }) {
     const gate = contractGate(draftArtifact.content);
     const draftRef = this.store.appendArtifact(draftArtifact);
     state.current.contract_artifact_ref = draftRef;
     state.current.contract_artifact_id = draftArtifact.artifact_id;
+    this.landCliRawLog(state, raw, "contract_draft", draftRef);
     state.contract_versions.push({
       version: draftArtifact.content.version,
       artifact_ref: draftRef,
@@ -182,10 +236,9 @@ export class ResearchOrchestrator {
     });
     if (!gate.ok) {
       this.blockWithoutWrite(state, "contract_draft", [draftRef], gate.errors);
-      return this.finish(state, signal, ["blocked"]);
+      return false;
     }
     recordPhase(state, "contract_draft", [draftRef], "pass");
-
     state.phase = "contract_review";
     state.pending_human_actions = [
       {
@@ -197,7 +250,132 @@ export class ResearchOrchestrator {
       }
     ];
     recordPhase(state, "contract_review", [draftRef], "manual");
-    return this.finish(state, signal, ["human_approval_required"]);
+    return true;
+  }
+
+  // Synchronous full start (used by the OpenClaw hook path + startFromText). The
+  // async dashboard path uses beginDraftFromText + executeContractRun instead.
+  async startResearch(state, signal) {
+    const { ready, intakeRef } = this._intake(state, signal);
+    if (!ready) {
+      return this.finish(state, signal, ["researchclaw_panel_ready", "research_direction_required"]);
+    }
+    state.phase = "contract_draft";
+    const result = await this._runDraftWorkflow(state, { intakeRef, evidenceRef: signal.rawPayloadRef });
+    const ok = this._commitDraft(state, result);
+    return this.finish(state, signal, ok ? ["human_approval_required"] : ["blocked"]);
+  }
+
+  // --- async dashboard path: return a "running" snapshot fast, draft in bg ---
+
+  _startSignal(projectId, userText, metadata) {
+    const rawPayloadRef = this.store.saveRawPayload(projectId, "manual-start", {
+      source: "manual",
+      userText,
+      metadata,
+      timestamp: nowIso()
+    });
+    return {
+      id: makeId("sig"),
+      source: "manual",
+      intent: "start_research",
+      event: "manual-start",
+      routeKey: "manual.start",
+      priority: "high",
+      timestamp: nowIso(),
+      projectId,
+      userText,
+      rawPayloadRef
+    };
+  }
+
+  async beginDraftFromText(projectId, userText, metadata = {}) {
+    this.store.ensureProject(projectId);
+    const signal = this._startSignal(projectId, userText, metadata);
+    const state = this.store.readState(projectId);
+    recordSignal(state, signal);
+    const { ready } = this._intake(state, signal);
+    if (!ready) {
+      return this.finish(state, signal, ["researchclaw_panel_ready", "research_direction_required"]);
+    }
+    this.eventBus?.clearCliChunks?.(projectId);
+    this.pendingRun.set(projectId, { kind: "draft" });
+    state.phase = "contract_draft";
+    state.pending_human_actions = [
+      { type: "phase_running", phase: "contract_draft", label: "Claude 起草研究契约中…" }
+    ];
+    const result = this.finish(state, signal, ["contract_draft_running"]);
+    return { ...result, needs_draft: true };
+  }
+
+  async beginRevise(projectId, request) {
+    const state = this.store.readState(projectId);
+    const { currentRef } = this._validateRevise(state, request);
+    this.eventBus?.clearCliChunks?.(projectId);
+    this.pendingRun.set(projectId, { kind: "revise", currentRef, feedback: request.feedback });
+    state.phase = "contract_draft";
+    state.pending_human_actions = [
+      { type: "phase_running", phase: "contract_draft", label: "Claude 修订研究契约中…" }
+    ];
+    const result = this.finishManual(state, ["contract_revise_running"]);
+    return { ...result, needs_draft: true };
+  }
+
+  // Runs the pending draft/revise in the background. Re-entrancy-guarded so a
+  // double-submit (or double executeContractRun) runs the workflow only once.
+  executeContractRun(projectId) {
+    if (this.inflight.has(projectId)) {
+      return this.inflight.get(projectId);
+    }
+    const run = this._executeContractRun(projectId)
+      .catch((err) => this._failContractRun(projectId, err))
+      .finally(() => {
+        this.inflight.delete(projectId);
+        this.pendingRun.delete(projectId);
+      });
+    this.inflight.set(projectId, run);
+    return run;
+  }
+
+  async _executeContractRun(projectId) {
+    const ctx = this.pendingRun.get(projectId);
+    const state = this.store.readState(projectId);
+    if (!ctx || state.phase !== "contract_draft") {
+      return;
+    }
+    let result;
+    if (ctx.kind === "revise") {
+      const currentArtifact = this.store.readArtifact(projectId, ctx.currentRef);
+      result = await this._runReviseWorkflow(state, {
+        currentRef: ctx.currentRef,
+        currentContract: currentArtifact.content,
+        feedback: ctx.feedback
+      });
+    } else {
+      result = await this._runDraftWorkflow(state, {
+        intakeRef: state.current.intake_artifact_ref,
+        evidenceRef: state.current.intake_raw_ref
+      });
+    }
+    this._commitDraft(state, result);
+    this.finishManual(state, [ctx.kind === "revise" ? "contract_revised" : "contract_drafted"]);
+  }
+
+  _failContractRun(projectId, err) {
+    const state = this.store.readState(projectId);
+    state.phase = "blocked";
+    state.block = { failed_phase: "contract_draft", retreat_to: null, errors: [String(err?.message || err)] };
+    state.pending_human_actions = [
+      {
+        type: "revise_required",
+        phase: "contract_draft",
+        retreat_to: null,
+        errors: state.block.errors,
+        label: "契约起草失败，可重新发起"
+      }
+    ];
+    recordPhase(state, "contract_draft", [], "fail");
+    this.finishManual(state, ["contract_draft_failed"]);
   }
 
   async approve(projectId, request) {
@@ -244,8 +422,7 @@ export class ResearchOrchestrator {
     return this.finishManual(state, ["contract_approved", "run_literature_scouting"]);
   }
 
-  async revise(projectId, request) {
-    const state = this.store.readState(projectId);
+  _validateRevise(state, request) {
     if (request.target !== "contract") {
       throw new Error("Only contract revision is supported in the first demo");
     }
@@ -256,45 +433,25 @@ export class ResearchOrchestrator {
     if (!currentRef) {
       throw new Error("No contract artifact is available for revision");
     }
-    const currentArtifact = this.store.readArtifact(projectId, currentRef);
+    const currentArtifact = this.store.readArtifact(state.project_id, currentRef);
     if (request.artifact_id && request.artifact_id !== currentArtifact.artifact_id) {
       throw new Error("Revision artifact_id does not match the active contract");
     }
-    const revisedArtifact = await runContractDraftWorkflow({
-      adapter: this.adapter,
-      projectId,
-      userText: state.current.research_direction,
-      previousContract: currentArtifact.content,
-      feedback: request.feedback,
-      inputRefs: [currentRef],
-      evidenceRefs: [currentRef]
+    return { currentRef, currentArtifact };
+  }
+
+  // Synchronous full revise (used directly by tests). The dashboard path uses
+  // beginRevise + executeContractRun for a non-blocking, live-streamed run.
+  async revise(projectId, request) {
+    const state = this.store.readState(projectId);
+    const { currentRef, currentArtifact } = this._validateRevise(state, request);
+    const result = await this._runReviseWorkflow(state, {
+      currentRef,
+      currentContract: currentArtifact.content,
+      feedback: request.feedback
     });
-    const gate = contractGate(revisedArtifact.content);
-    const revisedRef = this.store.appendArtifact(revisedArtifact);
-    state.current.contract_artifact_ref = revisedRef;
-    state.current.contract_artifact_id = revisedArtifact.artifact_id;
-    state.contract_versions.push({
-      version: revisedArtifact.content.version,
-      artifact_ref: revisedRef,
-      status: revisedArtifact.status
-    });
-    if (!gate.ok) {
-      this.blockWithoutWrite(state, "contract_draft", [revisedRef], gate.errors);
-      return this.finishManual(state, ["blocked"]);
-    }
-    recordPhase(state, "contract_draft", [revisedRef], "pass");
-    state.phase = "contract_review";
-    state.pending_human_actions = [
-      {
-        type: "approve_or_revise",
-        target: "contract",
-        artifact_id: revisedArtifact.artifact_id,
-        artifact_ref: revisedRef,
-        label: "Approve or revise contract"
-      }
-    ];
-    recordPhase(state, "contract_review", [revisedRef], "manual");
-    return this.finishManual(state, ["contract_revised", "human_approval_required"]);
+    const ok = this._commitDraft(state, result);
+    return this.finishManual(state, ok ? ["contract_revised", "human_approval_required"] : ["blocked"]);
   }
 
   async advance(projectId) {
@@ -599,6 +756,7 @@ export class ResearchOrchestrator {
   }
 
   finishManual(state, actions) {
+    this.persistUsage(state);
     touchState(state);
     this.store.writeState(state);
     this.emitSnapshot(state);
@@ -613,6 +771,7 @@ export class ResearchOrchestrator {
   }
 
   finish(state, signal, actions) {
+    this.persistUsage(state);
     touchState(state);
     this.store.writeState(state);
     this.emitSnapshot(state);

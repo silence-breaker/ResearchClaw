@@ -22,7 +22,7 @@ test("mock adapter returns deterministic structured output", async () => {
 
 test("workflow outputs artifacts without touching state", async () => {
   const adapter = new MockModelAdapter();
-  const artifact = await runContractDraftWorkflow({
+  const { contract: artifact, raw } = await runContractDraftWorkflow({
     adapter,
     projectId: "proj_demo_001",
     userText: "Explore retrieval reranking"
@@ -30,6 +30,8 @@ test("workflow outputs artifacts without touching state", async () => {
   assert.equal(artifact.type, "contract");
   assert.equal(artifact.status, "draft");
   assert.equal(artifact.content.project_id, "proj_demo_001");
+  // mock adapter has no CLI transcript, so no raw is surfaced.
+  assert.equal(raw, undefined);
 });
 
 test("literature workflow returns paper cards artifact", async () => {

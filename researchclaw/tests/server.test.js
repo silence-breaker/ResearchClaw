@@ -26,6 +26,41 @@ class BadBaselineAdapter extends MockModelAdapter {
   }
 }
 
+import { EventEmitter } from "node:events";
+import { PassThrough } from "node:stream";
+import { readFileSync, writeFileSync } from "node:fs";
+import { join as joinPath } from "node:path";
+import { fileURLToPath } from "node:url";
+import { ClaudeCodeAdapter } from "../adapters/claudeCode.js";
+import { createRoutingAdapter } from "../adapters/route.js";
+import { CostTracker } from "../engine/cost.js";
+
+const CLI_STREAM = readFileSync(
+  fileURLToPath(new URL("../../fixtures/cli/contract-draft.stream.jsonl", import.meta.url)),
+  "utf8"
+).trim().split("\n");
+const CLI_OUT = JSON.parse(
+  readFileSync(fileURLToPath(new URL("../../fixtures/cli/contract-draft.out.json", import.meta.url)), "utf8")
+);
+
+// Fake spawn that replays the recorded stream-json and writes out.json into the
+// sandbox cwd — same approach as tests/claudeCode.test.js, used here to drive a
+// real cli_chunk flow through the SSE endpoint without calling the network.
+function stubClaudeSpawn(_cmd, _args, opts) {
+  const child = new EventEmitter();
+  child.stdout = new PassThrough();
+  child.stderr = new PassThrough();
+  child.kill = () => child.emit("close", null);
+  setImmediate(() => {
+    for (const line of CLI_STREAM) child.stdout.write(`${line}\n`);
+    writeFileSync(joinPath(opts.cwd, "out.json"), JSON.stringify(CLI_OUT));
+    child.stdout.end();
+    child.stderr.end();
+    child.emit("close", 0);
+  });
+  return child;
+}
+
 async function postJson(baseUrl, path, body) {
   const res = await fetch(`${baseUrl}${path}`, {
     method: "POST",
@@ -35,12 +70,21 @@ async function postJson(baseUrl, path, body) {
   return { status: res.status, body: await res.json() };
 }
 
+// POST /start now returns a "running" ack and drafts the contract in the
+// background, so tests that need the contract must wait for it to settle.
+async function startAndWait(server, projectId, direction = "Explore retrieval reranking") {
+  await postJson(server.baseUrl, `/projects/${projectId}/start`, { research_direction: direction });
+  for (let i = 0; i < 200; i += 1) {
+    const st = server.store.readState(projectId);
+    if (st.phase !== "intake" && st.phase !== "contract_draft") return st;
+    await new Promise((r) => setTimeout(r, 10));
+  }
+  return server.store.readState(projectId);
+}
+
 async function driveToBlocked(server) {
   const projectId = "proj_recover";
-  await postJson(server.baseUrl, `/projects/${projectId}/start`, {
-    research_direction: "Explore retrieval reranking"
-  });
-  const state = server.store.readState(projectId);
+  const state = await startAndWait(server, projectId);
   await postJson(server.baseUrl, `/projects/${projectId}/approve`, {
     target: "contract",
     artifact_id: state.current.contract_artifact_id,
@@ -123,10 +167,7 @@ test("GET /evidence returns real claim->artifact mapping mid-pipeline", async ()
   const server = await startTestServer();
   try {
     const projectId = "proj_evidence";
-    await postJson(server.baseUrl, `/projects/${projectId}/start`, {
-      research_direction: "Explore retrieval reranking"
-    });
-    const state = server.store.readState(projectId);
+    const state = await startAndWait(server, projectId);
     await postJson(server.baseUrl, `/projects/${projectId}/approve`, {
       target: "contract",
       artifact_id: state.current.contract_artifact_id,
@@ -150,9 +191,7 @@ test("GET /evidence returns real claim->artifact mapping mid-pipeline", async ()
 test("archive / unarchive endpoints toggle the listing flag", async () => {
   const server = await startTestServer();
   try {
-    await postJson(server.baseUrl, "/projects/proj_arch/start", {
-      research_direction: "Explore retrieval reranking"
-    });
+    await startAndWait(server, "proj_arch");
 
     let res = await postJson(server.baseUrl, "/projects/proj_arch/archive", {});
     assert.equal(res.status, 200);
@@ -171,9 +210,7 @@ test("archive / unarchive endpoints toggle the listing flag", async () => {
 test("delete endpoint permanently removes a project", async () => {
   const server = await startTestServer();
   try {
-    await postJson(server.baseUrl, "/projects/proj_del/start", {
-      research_direction: "Explore retrieval reranking"
-    });
+    await startAndWait(server, "proj_del");
 
     const res = await postJson(server.baseUrl, "/projects/proj_del/delete", {});
     assert.equal(res.status, 200);
@@ -236,10 +273,7 @@ test("GET /stream pushes the current snapshot on connect and again after a state
   const server = await startTestServer();
   try {
     const projectId = "proj_sse";
-    await postJson(server.baseUrl, `/projects/${projectId}/start`, {
-      research_direction: "Explore retrieval reranking"
-    });
-    const state = server.store.readState(projectId);
+    const state = await startAndWait(server, projectId);
     const artifactId = state.current.contract_artifact_id;
 
     const { contentType, snapshots } = await readSnapshots(server.baseUrl, projectId, 2, () =>
@@ -258,6 +292,71 @@ test("GET /stream pushes the current snapshot on connect and again after a state
     assert.ok(Array.isArray(snapshots[0].phase_history), "snapshot carries full state");
     // second frame = state after approve
     assert.equal(snapshots[1].phase, "literature_scouting");
+  } finally {
+    await server.close();
+  }
+});
+
+// Reads the SSE stream and collects events matching `wantType` until `count`,
+// firing `trigger` once the connection is live (after the first snapshot).
+async function readEvents(baseUrl, projectId, wantType, count, trigger) {
+  const controller = new AbortController();
+  const res = await fetch(`${baseUrl}/projects/${projectId}/stream`, {
+    headers: { Accept: "text/event-stream" },
+    signal: controller.signal
+  });
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let triggered = false;
+  let sawSnapshot = false;
+  const collected = [];
+  while (collected.length < count) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let idx;
+    while ((idx = buffer.indexOf("\n\n")) !== -1) {
+      const event = parseSseFrame(buffer.slice(0, idx));
+      buffer = buffer.slice(idx + 2);
+      if (event?.type === "snapshot") sawSnapshot = true;
+      if (event?.type === wantType) collected.push(event.data);
+    }
+    if (!triggered && sawSnapshot && trigger) {
+      triggered = true;
+      await trigger();
+    }
+  }
+  controller.abort();
+  return collected;
+}
+
+test("GET /stream forwards cli_chunk events from a real ClaudeCodeAdapter run", async () => {
+  const server = await startTestServer(null, {
+    costTracker: new CostTracker(),
+    buildAdapter: (eventBus) => {
+      const costTracker = new CostTracker();
+      const primary = new ClaudeCodeAdapter({
+        eventBus,
+        config: { timeoutMs: 5000 },
+        spawnImpl: stubClaudeSpawn
+      });
+      return createRoutingAdapter({
+        phases: ["contract_draft"],
+        primary,
+        fallback: new MockModelAdapter(),
+        costTracker,
+        eventBus
+      });
+    }
+  });
+  try {
+    const projectId = "proj_cli_sse";
+    const chunks = await readEvents(server.baseUrl, projectId, "cli_chunk", 1, () =>
+      postJson(server.baseUrl, `/projects/${projectId}/start`, { research_direction: "improve retrieval reranking" })
+    );
+    assert.ok(chunks.length >= 1, "expected at least one cli_chunk event over SSE");
+    assert.equal(chunks[0].phase, "contract_draft");
   } finally {
     await server.close();
   }

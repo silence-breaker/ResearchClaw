@@ -79,6 +79,15 @@ describe("deriveActions", () => {
     expect(actions.map((a) => a.kind)).toEqual(["advance"]);
   });
 
+  test("phase_running yields a display-only running indicator", () => {
+    const pending: PendingAction[] = [
+      { type: "phase_running", phase: "contract_draft", label: "Claude 起草研究契约中…" }
+    ];
+    const actions = deriveActions(pending);
+    expect(actions).toHaveLength(1);
+    expect(actions[0]).toMatchObject({ kind: "running", label: "Claude 起草研究契约中…" });
+  });
+
   test("empty pending yields no actions", () => {
     expect(deriveActions([])).toEqual([]);
   });

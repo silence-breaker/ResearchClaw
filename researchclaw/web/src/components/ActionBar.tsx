@@ -52,6 +52,14 @@ export function ActionBar({ state }: { state: ProjectState }) {
               </span>
             );
           }
+          if (a.kind === "running") {
+            return (
+              <span key={i} className="inline-flex items-center gap-2 text-sm text-accent">
+                <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+                {a.label}
+              </span>
+            );
+          }
           if (a.kind === "approve") {
             return (
               <button

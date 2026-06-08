@@ -35,7 +35,7 @@ export async function runContractDraftWorkflow({
   if (!result.ok) {
     throw new Error(result.error?.message || "contract draft failed");
   }
-  return createArtifact({
+  const contract = createArtifact({
     projectId,
     phase: "contract_draft",
     type: "contract",
@@ -46,4 +46,7 @@ export async function runContractDraftWorkflow({
     content: result.output,
     status: "draft"
   });
+  // `raw` carries the CLI transcript + summary (present only for real Claude
+  // runs); the orchestrator lands it as a raw_log artifact (两通道 §2.1).
+  return { contract, raw: result.raw };
 }

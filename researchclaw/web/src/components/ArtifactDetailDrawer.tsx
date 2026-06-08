@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchArtifact } from "../api/client";
 import { useArtifactDrawer } from "../stores/drawer";
+import { AdapterBadge } from "./AdapterBadge";
 
 function Meta({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -60,7 +61,7 @@ export function ArtifactDetailDrawer({ projectId }: { projectId: string }) {
                 <Meta label="artifact_id" value={artifact.artifact_id} />
                 <Meta label="type" value={artifact.type} />
                 <Meta label="phase" value={artifact.phase} />
-                <Meta label="adapter" value={artifact.producer?.adapter ?? "—"} />
+                <Meta label="adapter" value={<AdapterBadge adapter={artifact.producer?.adapter} />} />
                 <Meta label="workflow" value={artifact.producer?.workflow ?? "—"} />
                 <Meta label="status" value={artifact.status} />
                 <Meta label="created_at" value={artifact.created_at} />

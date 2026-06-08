@@ -1,0 +1,32 @@
+{
+  "schema_version": "research-contract/v1",
+  "contract_id": "contract_cli_demo",
+  "project_id": "proj_cli_demo",
+  "status": "draft",
+  "version": 1,
+  "topic": "Retrieval-augmented reranking for domain-specific search",
+  "research_question": "Can a lightweight task-aware reranker improve retrieval quality over a published baseline at comparable latency?",
+  "hypothesis": "A reranker trained with structured hard negatives improves recall@10 without materially increasing inference cost.",
+  "setting": {
+    "domain": "information retrieval",
+    "task": "reranking"
+  },
+  "metrics": [
+    { "name": "recall@10", "direction": "higher_is_better", "reason": "Primary retrieval quality metric" },
+    { "name": "latency", "direction": "lower_is_better", "reason": "Inference overhead must stay measurable" }
+  ],
+  "data_split": {
+    "train": "to be selected during baseline scouting",
+    "validation": "to be selected during baseline scouting",
+    "test": "held-out split from selected baseline"
+  },
+  "success_criteria": [
+    { "id": "S1", "description": "Improves recall@10 over the selected baseline", "metric": "recall@10", "threshold": ">= baseline + 1.0 absolute point" }
+  ],
+  "failure_signals": [
+    { "id": "F1", "description": "No measurable improvement under the same split", "metric": "recall@10", "threshold": "< baseline + 0.3 absolute point" }
+  ],
+  "claim_evidence_map": [
+    { "claim_id": "C1", "claim": "The proposed reranker improves retrieval quality.", "required_evidence": ["literature survey", "selected baseline", "main metric table"] }
+  ]
+}
