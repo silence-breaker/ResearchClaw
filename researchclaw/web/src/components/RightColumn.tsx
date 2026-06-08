@@ -1,9 +1,12 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchArtifact } from "../api/client";
 import type { CliChunk, ProjectCurrent, ProjectState } from "../api/types";
+import type { LiveConsult } from "../lib/consult";
 import { isDegradedChunk } from "../lib/cliStream";
 import { readRawLogSummary } from "../lib/processFeed";
 import { AdapterBadge } from "./AdapterBadge";
+import { ConsultPanel } from "./ConsultPanel";
 import { RefChip } from "./RefChip";
 
 // The structured artifacts a project can produce, in pipeline order.
@@ -75,17 +78,46 @@ function LiveChunks({ chunks }: { chunks: CliChunk[] }) {
   );
 }
 
-// M2: the right lane shows the real CLI process channel — process feed (raw_log
-// summaries), live cli_chunk actions, and honest source badges. consult (一问一答)
-// is M3, so the input stays disabled. Gemini / Codex remain placeholders.
-export function RightColumn({ state, cliChunks = [] }: { state: ProjectState; cliChunks?: CliChunk[] }) {
+// One promoted consult_note row, rendered in its own section — visually
+// separated from gated conclusion artifacts. Honest: a human-adopted note, never
+// a gate-validated conclusion, never counted as evidence (两通道红线).
+function ConsultNoteRow({ projectId, refValue }: { projectId: string; refValue: string }) {
+  const query = useQuery({ queryKey: ["artifact", projectId, refValue], queryFn: () => fetchArtifact(projectId, refValue) });
+  const content = (query.data?.content ?? {}) as { question?: string; note?: string };
+  return (
+    <li className="flex items-center gap-2 text-xs text-panel-muted">
+      <span className="flex-1 truncate" title={content.note ?? undefined}>
+        {content.question ?? "consult 笔记"}
+      </span>
+      <RefChip refValue={refValue} label="查看" />
+    </li>
+  );
+}
+
+// M3: the right lane is the CLI process channel + a real consult 一问一答 view.
+// Clicking Claude opens the chat; workflow chunks still drive the process feed.
+// Gemini / Codex remain placeholders. consult is process-only — promoted notes
+// live in a separate, clearly-labelled section, never mixed with conclusions.
+export function RightColumn({
+  state,
+  cliChunks = [],
+  liveConsult = null,
+  onSendConsult
+}: {
+  state: ProjectState;
+  cliChunks?: CliChunk[];
+  liveConsult?: LiveConsult | null;
+  onSendConsult?: (message: string) => void;
+}) {
   const projectId = state.project_id;
   const rawLogs = state.current.raw_log_artifact_refs ?? [];
+  const consultNoteRefs = state.current.consult_note_refs ?? [];
   const artifacts = STRUCTURED_ARTIFACTS.map((a) => ({
     label: a.label,
     ref: state.current[a.key] as string | undefined
   })).filter((a): a is { label: string; ref: string } => Boolean(a.ref));
   const degraded = cliChunks.some(isDegradedChunk);
+  const [consultOpen, setConsultOpen] = useState(false);
 
   return (
     <aside className="flex w-72 shrink-0 flex-col gap-4 border-l border-panel-border bg-panel-surface p-4">
@@ -99,9 +131,11 @@ export function RightColumn({ state, cliChunks = [] }: { state: ProjectState; cl
         <div className="text-sm font-semibold text-panel-text">模型互动 / 实时视图</div>
         <div className="mt-2 flex gap-2">
           <button
-            disabled
-            title="workflow 模式已接入（只读）；一问一答为 M3"
-            className="cursor-default rounded border border-accent/40 bg-accent/15 px-2 py-1 text-xs text-accent"
+            onClick={() => setConsultOpen((open) => !open)}
+            title="点击与 Claude 一问一答（Haiku）"
+            className={`rounded border px-2 py-1 text-xs ${
+              consultOpen ? "border-accent bg-accent/25 text-accent" : "border-accent/40 bg-accent/15 text-accent"
+            }`}
           >
             Claude{cliChunks.length > 0 ? " ●" : ""}
           </button>
@@ -119,8 +153,12 @@ export function RightColumn({ state, cliChunks = [] }: { state: ProjectState; cl
             </button>
           ))}
         </div>
-        <div className="mt-1 text-[10px] text-panel-muted">Claude workflow 模式接入；一问一答 / Gemini / Codex 待 M3+。</div>
+        <div className="mt-1 text-[10px] text-panel-muted">点 Claude 一问一答（Haiku）；Gemini / Codex 待接入。</div>
       </div>
+
+      {consultOpen && onSendConsult && (
+        <ConsultPanel projectId={projectId} state={state} liveConsult={liveConsult} onSend={onSendConsult} />
+      )}
 
       <LiveChunks chunks={cliChunks} />
 
@@ -150,13 +188,17 @@ export function RightColumn({ state, cliChunks = [] }: { state: ProjectState; cl
         )}
       </div>
 
-      <div>
-        <input
-          disabled
-          placeholder="M3 开放与 Claude 一问一答"
-          className="w-full cursor-not-allowed rounded border border-panel-border bg-panel-bg px-3 py-2 text-xs text-panel-muted/70"
-        />
-      </div>
+      {consultNoteRefs.length > 0 && (
+        <div>
+          <div className="text-xs uppercase tracking-wide text-panel-muted">采纳笔记（consult，未过 gate）</div>
+          <ul className="mt-2 space-y-1">
+            {consultNoteRefs.map((ref) => (
+              <ConsultNoteRow key={ref} projectId={projectId} refValue={ref} />
+            ))}
+          </ul>
+          <div className="mt-1 text-[10px] text-panel-muted/80">人工从对话采纳，未经 gate 校验，不计入证据覆盖。</div>
+        </div>
+      )}
     </aside>
   );
 }

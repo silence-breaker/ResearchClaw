@@ -19,7 +19,7 @@ import { renderIndexPage, renderPanelPage } from "./ui.js";
 // for the contract_draft phase in M2; anything else stays on mock. Returns the
 // adapter plus an optional costTracker the orchestrator persists into
 // state.usage. See M2技术路线-后端 §7/§8 and 技术路线指南 §7 (cost is a hard rule).
-function buildAdapter(eventBus) {
+export function buildAdapter(eventBus) {
   const enabled = process.env.RESEARCHCLAW_ENABLE_CLAUDE === "1";
   if (!enabled || !ClaudeCodeAdapter.isAvailable()) {
     if (enabled) {
@@ -146,6 +146,16 @@ export function createResearchServer({ store, orchestrator, eventBus = null, web
       return;
     }
 
+    // Health check for the panel's "OpenClaw Gateway 连接状态" indicator (§5.1).
+    if (req.method === "GET" && url.pathname === "/health") {
+      sendJson(res, 200, {
+        ok: true,
+        service: "researchclaw",
+        projects: store.listProjectIds().length
+      });
+      return;
+    }
+
     if (req.method === "GET" && url.pathname === "/projects") {
       sendJson(res, 200, {
         ok: true,
@@ -230,6 +240,28 @@ export function createResearchServer({ store, orchestrator, eventBus = null, web
       if (result.needs_draft) {
         orchestrator.executeContractRun(reviseMatch[1]).catch(() => {});
       }
+      return;
+    }
+
+    // consult 一问一答 (M3): ack fast, run the turn in the background so the panel
+    // streams cli_chunk(consult) + the final consult_message live. consult never
+    // advances research state; if Claude is unavailable it refuses honestly.
+    const consultMatch = url.pathname.match(/^\/projects\/([^/]+)\/consult$/);
+    if (req.method === "POST" && consultMatch) {
+      const body = await readJsonBody(req);
+      const ack = await orchestrator.beginConsult(consultMatch[1], body.message);
+      sendJson(res, 200, ack);
+      if (ack.running) {
+        orchestrator.executeConsult(consultMatch[1], body.message).catch(() => {});
+      }
+      return;
+    }
+
+    const consultPromoteMatch = url.pathname.match(/^\/projects\/([^/]+)\/consult\/promote$/);
+    if (req.method === "POST" && consultPromoteMatch) {
+      const body = await readJsonBody(req);
+      const result = orchestrator.promoteConsult(consultPromoteMatch[1], body.raw_log_ref, body.note);
+      sendJson(res, 200, result);
       return;
     }
 

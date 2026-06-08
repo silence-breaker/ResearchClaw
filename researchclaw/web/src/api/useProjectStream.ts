@@ -1,7 +1,14 @@
-import { useEffect, useState } from "react";
-import type { CliChunk, ProjectState } from "./types";
-import { fetchState } from "./client";
+import { useCallback, useEffect, useState } from "react";
+import type { CliChunk, ConsultMessage, ProjectState } from "./types";
+import { fetchState, sendConsult as apiSendConsult } from "./client";
 import { reduceCliChunks } from "../lib/cliStream";
+import {
+  appendConsultChunk,
+  applyConsultMessage,
+  isConsultChunk,
+  startLiveConsult,
+  type LiveConsult
+} from "../lib/consult";
 
 export type StreamStatus = "connecting" | "live" | "polling";
 
@@ -10,6 +17,8 @@ interface StreamResult {
   status: StreamStatus;
   error: string | null;
   cliChunks: CliChunk[];
+  liveConsult: LiveConsult | null;
+  sendConsult: (message: string) => Promise<void>;
 }
 
 // Subscribes to the backend SSE stream for one project. Each `snapshot` event
@@ -20,6 +29,7 @@ export function useProjectStream(projectId: string | undefined): StreamResult {
   const [status, setStatus] = useState<StreamStatus>("connecting");
   const [error, setError] = useState<string | null>(null);
   const [cliChunks, setCliChunks] = useState<CliChunk[]>([]);
+  const [liveConsult, setLiveConsult] = useState<LiveConsult | null>(null);
 
   useEffect(() => {
     if (!projectId) {
@@ -29,6 +39,7 @@ export function useProjectStream(projectId: string | undefined): StreamResult {
     setStatus("connecting");
     setError(null);
     setCliChunks([]);
+    setLiveConsult(null);
 
     let pollTimer: ReturnType<typeof setInterval> | null = null;
     const startPolling = () => {
@@ -53,13 +64,27 @@ export function useProjectStream(projectId: string | undefined): StreamResult {
       }
     });
     // cli_chunk drives the right-column process feed only — it never updates the
-    // conclusion views (those come from `snapshot`). Buffered with a cap.
+    // conclusion views (those come from `snapshot`). consult-kind chunks stream
+    // into the live consult turn; workflow chunks buffer for the process feed.
     source.addEventListener("cli_chunk", (event) => {
       try {
         const chunk = JSON.parse((event as MessageEvent).data) as CliChunk;
-        setCliChunks((prev) => reduceCliChunks(prev, chunk));
+        if (isConsultChunk(chunk)) {
+          setLiveConsult((prev) => appendConsultChunk(prev, chunk));
+        } else {
+          setCliChunks((prev) => reduceCliChunks(prev, chunk));
+        }
       } catch {
         /* tolerate a malformed chunk */
+      }
+    });
+    // consult_message settles the live turn (done + raw_log ref, or error).
+    source.addEventListener("consult_message", (event) => {
+      try {
+        const msg = JSON.parse((event as MessageEvent).data) as ConsultMessage;
+        setLiveConsult((prev) => applyConsultMessage(prev, msg));
+      } catch {
+        /* tolerate a malformed message */
       }
     });
     source.onerror = () => {
@@ -73,5 +98,26 @@ export function useProjectStream(projectId: string | undefined): StreamResult {
     };
   }, [projectId]);
 
-  return { state, status, error, cliChunks };
+  // Optimistically start a live turn, then POST. The streaming reply + final
+  // settle arrive over SSE (cli_chunk/consult_message). An unavailable/refused
+  // ack flips the live turn to an honest error — never a fake reply.
+  const sendConsult = useCallback(
+    async (message: string) => {
+      if (!projectId || !message.trim()) {
+        return;
+      }
+      setLiveConsult(startLiveConsult(message));
+      try {
+        const ack = await apiSendConsult(projectId, message);
+        if (!ack.ok) {
+          setLiveConsult((prev) => (prev ? { ...prev, status: "error", error: ack.error?.message ?? "Claude 未接入" } : prev));
+        }
+      } catch (err) {
+        setLiveConsult((prev) => (prev ? { ...prev, status: "error", error: String(err) } : prev));
+      }
+    },
+    [projectId]
+  );
+
+  return { state, status, error, cliChunks, liveConsult, sendConsult };
 }

@@ -8,7 +8,11 @@ const artifactTypes = new Set([
   "idea_cards",
   "idea_review_report",
   "summary",
-  "raw_log"
+  "raw_log",
+  // M3: a human-promoted consult turn. Lives in the evidence store for
+  // traceability + honest attribution, but is NEVER a gated conclusion and is
+  // excluded from claim_evidence (两通道红线). See M3技术路线-后端 §6.
+  "consult_note"
 ]);
 
 export function createArtifact({

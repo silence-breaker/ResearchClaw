@@ -177,3 +177,10 @@ test("run passes the overriding env to the spawned process", async () => {
   assert.equal(captured.ANTHROPIC_BASE_URL, "https://yunwu.example");
   assert.equal(captured.ANTHROPIC_AUTH_TOKEN, "sk-rc-key");
 });
+
+test("run captures cache tokens from the result usage (M4)", async () => {
+  const adapter = makeAdapter(makeStub({ lines: streamLines(), outContent: outFixture() }));
+  const result = await adapter.run(request());
+  assert.equal(result.usage.cache_creation_input_tokens, 40885);
+  assert.equal(result.usage.cache_read_input_tokens, 36748);
+});

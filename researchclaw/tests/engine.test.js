@@ -213,11 +213,15 @@ class KillReviewAdapter extends MockModelAdapter {
   }
 }
 
-test("start research transitions to contract review and waits for approval", async () => {
+test("start research acks running fast then drafts the contract in the background", async () => {
   const { store, orchestrator } = createTempHarness();
   const payload = readJsonUrl(new URL("../../fixtures/openclaw/keyword-detector.json", import.meta.url));
   const result = await handleOpenClawPayload({ payload, store, orchestrator });
-  assert.equal(result.body.phase, "contract_review");
+  // Fast ack: running, not blocking on the draft (hook must not block ~38s on a real CLI run).
+  assert.equal(result.body.phase, "contract_draft");
+  assert.ok(result.body.actions.includes("contract_draft_running"));
+  // Background draft settles into contract_review.
+  await orchestrator.executeContractRun("proj_demo_001");
   const state = store.readState("proj_demo_001");
   assert.equal(state.phase, "contract_review");
   assert.ok(state.current.contract_artifact_ref);
@@ -228,6 +232,7 @@ test("approve and advance run the mock pipeline one phase at a time", async () =
   const { store, orchestrator } = createTempHarness();
   const payload = readJsonUrl(new URL("../../fixtures/openclaw/keyword-detector.json", import.meta.url));
   await handleOpenClawPayload({ payload, store, orchestrator });
+  await orchestrator.executeContractRun("proj_demo_001");
   const stateBefore = store.readState("proj_demo_001");
   const result = await orchestrator.approve("proj_demo_001", {
     target: "contract",
@@ -260,6 +265,7 @@ test("summary evidence_index is computed from the contract claim map", async () 
   const { store, orchestrator } = createTempHarness();
   const payload = readJsonUrl(new URL("../../fixtures/openclaw/keyword-detector.json", import.meta.url));
   await handleOpenClawPayload({ payload, store, orchestrator });
+  await orchestrator.executeContractRun("proj_demo_001");
   const stateBefore = store.readState("proj_demo_001");
   await orchestrator.approve("proj_demo_001", {
     target: "contract",
@@ -290,6 +296,7 @@ test("previewEvidence computes real satisfied/pending claims mid-pipeline", asyn
   const { store, orchestrator } = createTempHarness();
   const payload = readJsonUrl(new URL("../../fixtures/openclaw/keyword-detector.json", import.meta.url));
   await handleOpenClawPayload({ payload, store, orchestrator });
+  await orchestrator.executeContractRun("proj_demo_001");
   const stateBefore = store.readState("proj_demo_001");
   await orchestrator.approve("proj_demo_001", {
     target: "contract",
@@ -316,6 +323,7 @@ test("baseline gate failure blocks the pipeline", async () => {
   const orchestrator = new ResearchOrchestrator({ store, adapter: new BadBaselineAdapter() });
   const payload = readJsonUrl(new URL("../../fixtures/openclaw/keyword-detector.json", import.meta.url));
   await handleOpenClawPayload({ payload, store, orchestrator });
+  await orchestrator.executeContractRun("proj_demo_001");
   const stateBefore = store.readState("proj_demo_001");
   await orchestrator.approve("proj_demo_001", {
     target: "contract",
@@ -338,6 +346,7 @@ test("a blocked gate failure records a retreat target", async () => {
   const orchestrator = new ResearchOrchestrator({ store, adapter: new BadBaselineAdapter() });
   const payload = readJsonUrl(new URL("../../fixtures/openclaw/keyword-detector.json", import.meta.url));
   await handleOpenClawPayload({ payload, store, orchestrator });
+  await orchestrator.executeContractRun("proj_demo_001");
   const stateBefore = store.readState("proj_demo_001");
   await orchestrator.approve("proj_demo_001", {
     target: "contract",
@@ -358,6 +367,7 @@ test("recover returns a blocked project to its retreat phase and lets it re-run"
   const orchestrator = new ResearchOrchestrator({ store, adapter: new BadBaselineAdapter() });
   const payload = readJsonUrl(new URL("../../fixtures/openclaw/keyword-detector.json", import.meta.url));
   await handleOpenClawPayload({ payload, store, orchestrator });
+  await orchestrator.executeContractRun("proj_demo_001");
   const stateBefore = store.readState("proj_demo_001");
   await orchestrator.approve("proj_demo_001", {
     target: "contract",
@@ -384,6 +394,7 @@ test("all-kill idea review blocks before summary", async () => {
   const orchestrator = new ResearchOrchestrator({ store, adapter: new KillReviewAdapter() });
   const payload = readJsonUrl(new URL("../../fixtures/openclaw/keyword-detector.json", import.meta.url));
   await handleOpenClawPayload({ payload, store, orchestrator });
+  await orchestrator.executeContractRun("proj_demo_001");
   const stateBefore = store.readState("proj_demo_001");
   await orchestrator.approve("proj_demo_001", {
     target: "contract",

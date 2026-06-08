@@ -1,4 +1,4 @@
-import type { Artifact, EvidencePreview, ProjectState, ProjectSummary } from "./types";
+import type { Artifact, EvidencePreview, HealthStatus, ProjectState, ProjectSummary } from "./types";
 
 async function getJson<T>(path: string): Promise<T> {
   const res = await fetch(path, { headers: { Accept: "application/json" } });
@@ -11,6 +11,10 @@ async function getJson<T>(path: string): Promise<T> {
 export async function fetchProjects(): Promise<ProjectSummary[]> {
   const body = await getJson<{ ok: boolean; projects: ProjectSummary[] }>("/projects");
   return body.projects ?? [];
+}
+
+export async function fetchHealth(): Promise<HealthStatus> {
+  return getJson<HealthStatus>("/health");
 }
 
 export async function fetchState(projectId: string): Promise<ProjectState> {
@@ -76,6 +80,34 @@ export function reviseContract(
 
 export function startProject(projectId: string, researchDirection: string): Promise<unknown> {
   return postJson(`/projects/${projectId}/start`, { research_direction: researchDirection });
+}
+
+// consult 一问一答 (M3). The backend acks fast and runs the turn in the
+// background; the reply streams over SSE. An unavailable/over-budget backend
+// returns { ok:false, error } — an expected honest state, NOT thrown (so we use
+// fetch directly rather than postJson, which throws on ok:false).
+export async function sendConsult(
+  projectId: string,
+  message: string
+): Promise<{ ok: boolean; running?: boolean; error?: { code: string; message: string } }> {
+  const res = await fetch(`/projects/${projectId}/consult`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ message })
+  });
+  try {
+    return (await res.json()) as { ok: boolean; running?: boolean; error?: { code: string; message: string } };
+  } catch {
+    return { ok: false, error: { code: "bad_response", message: `consult failed: ${res.status}` } };
+  }
+}
+
+export function promoteConsult(
+  projectId: string,
+  rawLogRef: string,
+  note?: string
+): Promise<{ ok: boolean; artifact_ref: string }> {
+  return postJson(`/projects/${projectId}/consult/promote`, { raw_log_ref: rawLogRef, note });
 }
 
 export function advancePhase(projectId: string): Promise<unknown> {

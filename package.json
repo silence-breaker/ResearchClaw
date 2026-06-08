@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "node researchclaw/server.js",
     "demo:fixture": "node researchclaw/demo-fixture.js",
+    "smoke:claude": "RESEARCHCLAW_ENABLE_CLAUDE=1 node researchclaw/scripts/smoke-claude.js",
     "test": "node --test researchclaw/tests/*.test.js"
   },
   "engines": {

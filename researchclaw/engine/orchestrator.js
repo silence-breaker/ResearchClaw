@@ -70,6 +70,23 @@ export class ResearchOrchestrator {
     // pending run context (draft vs revise inputs) set by begin*, read by execute.
     this.inflight = new Map();
     this.pendingRun = new Map();
+    // Per-project consult turn chain: serializes executeConsult so multi-turn
+    // --resume context stays ordered (M3技术路线-后端 §4). In-memory.
+    this.consultChain = new Map();
+    // Last persisted phase per project, so finish() can stamp
+    // current.phase_started_at only when the phase actually changes (M4 §6). In-memory.
+    this.lastPhase = new Map();
+  }
+
+  // Stamps current.phase_started_at when the phase changed since the last write,
+  // so the panel can show "当前阶段已用时". consult metadata writes don't change
+  // state.phase, so they never reset the timer.
+  stampPhaseStart(state) {
+    if (this.lastPhase.get(state.project_id) !== state.phase) {
+      state.current = state.current || {};
+      state.current.phase_started_at = nowIso();
+      this.lastPhase.set(state.project_id, state.phase);
+    }
   }
 
   // Lands a CLI transcript (process channel) as a raw_log artifact and records
@@ -118,8 +135,15 @@ export class ResearchOrchestrator {
     switch (signal.intent) {
       case "start_or_resume":
         return this.finish(state, signal, ["project_ready"]);
-      case "start_research":
-        return this.startResearch(state, signal);
+      case "start_research": {
+        // Async like the dashboard /start: ack fast, draft in the background so
+        // the OpenClaw hook doesn't block ~38s on a real CLI run (M4技术路线-后端 §7).
+        const ack = this.beginResearch(state, signal);
+        if (ack.needs_draft) {
+          this.executeContractRun(signal.projectId).catch(() => {});
+        }
+        return ack;
+      }
       case "human_feedback":
         state.pending_human_actions = state.pending_human_actions.length
           ? state.pending_human_actions
@@ -264,6 +288,24 @@ export class ResearchOrchestrator {
     const result = await this._runDraftWorkflow(state, { intakeRef, evidenceRef: signal.rawPayloadRef });
     const ok = this._commitDraft(state, result);
     return this.finish(state, signal, ok ? ["human_approval_required"] : ["blocked"]);
+  }
+
+  // Async hook path: intake + mark running, return a fast ack. The caller
+  // schedules executeContractRun in the background. Reuses the dashboard's
+  // begin/execute machinery but works from an already-recorded hook signal.
+  beginResearch(state, signal) {
+    const { ready } = this._intake(state, signal);
+    if (!ready) {
+      return this.finish(state, signal, ["researchclaw_panel_ready", "research_direction_required"]);
+    }
+    this.eventBus?.clearCliChunks?.(state.project_id);
+    this.pendingRun.set(state.project_id, { kind: "draft" });
+    state.phase = "contract_draft";
+    state.pending_human_actions = [
+      { type: "phase_running", phase: "contract_draft", label: "Claude 起草研究契约中…" }
+    ];
+    const result = this.finish(state, signal, ["contract_draft_running"]);
+    return { ...result, needs_draft: true };
   }
 
   // --- async dashboard path: return a "running" snapshot fast, draft in bg ---
@@ -673,6 +715,149 @@ export class ResearchOrchestrator {
     return { ok: true, ready: true, gate_ok: check.ok, evidence_index: check.evidence_index };
   }
 
+  // --- consult mode (人机一问一答, M3) ----------------------------------------
+  // consult NEVER advances research state: no phase / phase_history / gate /
+  // claim_evidence. It writes only state.consult (session metadata) + a consult
+  // raw_log (process channel). See M3技术路线-后端 §3/§4.
+
+  consultAvailable() {
+    return typeof this.adapter.consult === "function";
+  }
+
+  // Fast ack for the panel; the actual turn runs in executeConsult. consult does
+  // NOT degrade to mock — if Claude is unavailable it honestly refuses (a fake
+  // reply would break the two-channel red line; there is no pipeline to keep alive).
+  async beginConsult(projectId, message) {
+    this.store.ensureProject(projectId);
+    if (!message || !message.trim()) {
+      return { ok: false, running: false, error: { code: "empty_message", message: "消息不能为空" } };
+    }
+    if (!this.consultAvailable()) {
+      return { ok: false, running: false, error: { code: "unavailable", message: "Claude 未接入，一问一答不可用" } };
+    }
+    return { ok: true, running: true, project_id: projectId };
+  }
+
+  // Runs one consult turn, serialized per project so --resume context stays
+  // ordered across concurrent sends.
+  executeConsult(projectId, message) {
+    const prev = this.consultChain.get(projectId) || Promise.resolve();
+    const next = prev.catch(() => {}).then(() => this._executeConsult(projectId, message));
+    this.consultChain.set(projectId, next.catch(() => {}));
+    return next;
+  }
+
+  async _executeConsult(projectId, message) {
+    const state = this.store.readState(projectId);
+    const sessionId = state.consult?.session_id || undefined;
+    const result = await this.adapter.consult({ project_id: projectId, message, session_id: sessionId });
+    if (!result.ok) {
+      this.eventBus?.emit(projectId, {
+        type: "consult_message",
+        data: { ok: false, question: message, error: result.error, ts: nowIso() }
+      });
+      return result;
+    }
+    const rawLogRef = this.landConsultRawLog(state, result, message);
+    state.consult = {
+      session_id: result.session_id || sessionId || null,
+      turn_count: (state.consult?.turn_count || 0) + 1,
+      last_turn_at: nowIso(),
+      raw_log_refs: [...(state.consult?.raw_log_refs || []), rawLogRef]
+    };
+    if (this.costTracker) {
+      this.costTracker.record(projectId, { ...result.usage, phase: "consult" });
+    }
+    this.persistUsage(state);
+    touchState(state);
+    this.store.writeState(state);
+    this.eventBus?.emit(projectId, {
+      type: "consult_message",
+      data: {
+        ok: true,
+        raw_log_ref: rawLogRef,
+        question: message,
+        answer_summary: (result.text || "").slice(0, 280),
+        session_id: state.consult.session_id,
+        ts: nowIso()
+      }
+    });
+    this.emitSnapshot(state);
+    return { ...result, raw_log_ref: rawLogRef };
+  }
+
+  // Lands one consult turn as a consult raw_log (process channel only). Stores
+  // question + answer_text so a later promote can build the consult_note.
+  // Records the ref on both raw_log_artifact_refs (shared feed) and
+  // consult.raw_log_refs (consult thread). Never a conclusion.
+  landConsultRawLog(state, result, question) {
+    const transcriptRef = this.store.saveRawPayload(state.project_id, "consult-transcript", {
+      transcript: result.raw?.transcript || ""
+    });
+    const artifact = createArtifact({
+      projectId: state.project_id,
+      phase: state.phase,
+      type: "raw_log",
+      workflow: "consult",
+      adapter: "claude",
+      inputRefs: [],
+      evidenceRefs: [],
+      content: redactSecrets({
+        model: result.usage?.model,
+        time: nowIso(),
+        role: "对话",
+        question,
+        answer_text: result.text,
+        summary: (result.text || "").slice(0, 280),
+        session_id: result.session_id,
+        transcript_ref: transcriptRef
+      })
+    });
+    const ref = this.store.appendArtifact(artifact);
+    state.current.raw_log_artifact_refs = [...(state.current.raw_log_artifact_refs || []), ref];
+    return ref;
+  }
+
+  // Human promote of a consult turn → a consult_note artifact. Lands in the
+  // evidence store for traceability + honest attribution, but does NOT advance
+  // research state, does NOT pass a gate, and is NOT counted as claim evidence
+  // (两通道红线 §2.1 / M3技术路线-后端 §6). Idempotent per source raw_log.
+  promoteConsult(projectId, rawLogRef, note = null) {
+    const state = this.store.readState(projectId);
+    const source = this.store.readArtifact(projectId, rawLogRef);
+    if (source.type !== "raw_log" || source.producer?.workflow !== "consult") {
+      throw new Error("promoteConsult target must be a consult raw_log");
+    }
+    const existing = (state.current.consult_note_refs || []).find((ref) => {
+      const note = this.store.readArtifact(projectId, ref);
+      return note.content?.source_raw_log_ref === rawLogRef;
+    });
+    if (existing) {
+      return { ...this.finishManual(state, ["consult_note_exists"]), artifact_ref: existing };
+    }
+    const artifact = createArtifact({
+      projectId,
+      phase: state.phase,
+      type: "consult_note",
+      workflow: "consult_promote",
+      adapter: "claude",
+      inputRefs: [rawLogRef],
+      evidenceRefs: [rawLogRef],
+      content: redactSecrets({
+        source_raw_log_ref: rawLogRef,
+        question: source.content?.question ?? null,
+        answer_text: source.content?.answer_text ?? source.content?.summary ?? null,
+        transcript_ref: source.content?.transcript_ref ?? null,
+        session_id: source.content?.session_id ?? null,
+        note,
+        promoted_at: nowIso()
+      })
+    });
+    const ref = this.store.appendArtifact(artifact);
+    state.current.consult_note_refs = [...(state.current.consult_note_refs || []), ref];
+    return { ...this.finishManual(state, ["consult_note_promoted"]), artifact_ref: ref };
+  }
+
   getContract(state) {
     const ref = state.current.contract_artifact_ref;
     if (!ref) {
@@ -756,6 +941,7 @@ export class ResearchOrchestrator {
   }
 
   finishManual(state, actions) {
+    this.stampPhaseStart(state);
     this.persistUsage(state);
     touchState(state);
     this.store.writeState(state);
@@ -771,6 +957,7 @@ export class ResearchOrchestrator {
   }
 
   finish(state, signal, actions) {
+    this.stampPhaseStart(state);
     this.persistUsage(state);
     touchState(state);
     this.store.writeState(state);

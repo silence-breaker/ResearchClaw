@@ -54,6 +54,28 @@ export function createRoutingAdapter({ phases = [], primary, fallback, costTrack
         costTracker?.record(request.project_id, { ...result.usage, phase: request.phase });
       }
       return result;
+    },
+
+    // consult (M3) delegates to the primary's consult mode. Unlike run(), consult
+    // does NOT degrade to mock: there is no pipeline to keep alive, and a faked
+    // reply would break the two-channel red line. So unavailable / over-budget /
+    // failure are surfaced honestly. Usage is recorded under the "consult" phase.
+    async consult(request) {
+      if (!primary || primary.available === false || typeof primary.consult !== "function") {
+        return { ok: false, adapter: "claude", error: { code: "unavailable", message: "Claude 未接入，一问一答不可用", retryable: false } };
+      }
+      if (costTracker?.overBudget(request.project_id)) {
+        return { ok: false, adapter: "claude", error: { code: "over_budget", message: "超出会话预算，consult 已暂停", retryable: false } };
+      }
+      const result = await primary.consult(request);
+      if (!result.ok) {
+        costTracker?.recordFailure(request.project_id, "consult");
+        return result;
+      }
+      if (result.usage) {
+        costTracker?.record(request.project_id, { ...result.usage, phase: "consult" });
+      }
+      return result;
     }
   };
 }

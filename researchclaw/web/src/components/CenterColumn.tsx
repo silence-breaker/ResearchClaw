@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ProjectState } from "../api/types";
+import type { CliChunk, ProjectState } from "../api/types";
 import { ActionBar } from "./ActionBar";
 import { MetricsRow } from "./MetricsRow";
 import { PipelineProgress } from "./PipelineProgress";
@@ -7,6 +7,8 @@ import { ContractTab } from "./ContractTab";
 import { PhaseStatusTab } from "./PhaseStatusTab";
 import { EvidenceMapTab } from "./EvidenceMapTab";
 import { ChangeHistoryTab } from "./ChangeHistoryTab";
+import { EventStream } from "./EventStream";
+import { CurrentPhaseCard } from "./CurrentPhaseCard";
 
 type TabId = "contract" | "phase_status" | "evidence_map" | "change_history";
 
@@ -17,7 +19,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "change_history", label: "变更历史" }
 ];
 
-export function CenterColumn({ state }: { state: ProjectState }) {
+export function CenterColumn({ state, cliChunks = [] }: { state: ProjectState; cliChunks?: CliChunk[] }) {
   const [tab, setTab] = useState<TabId>("contract");
 
   return (
@@ -32,6 +34,7 @@ export function CenterColumn({ state }: { state: ProjectState }) {
       <ActionBar state={state} />
       <MetricsRow state={state} />
       <PipelineProgress state={state} />
+      <CurrentPhaseCard state={state} />
 
       <section className="rounded-lg border border-panel-border bg-panel-surface">
         <div className="flex gap-1 border-b border-panel-border px-2">
@@ -55,6 +58,8 @@ export function CenterColumn({ state }: { state: ProjectState }) {
           {tab === "change_history" && <ChangeHistoryTab state={state} />}
         </div>
       </section>
+
+      <EventStream state={state} cliChunks={cliChunks} />
     </main>
   );
 }

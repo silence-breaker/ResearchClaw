@@ -4,3 +4,4 @@ node_modules/
 .env.*
 API.md
 oh-my-claude-code/
+logs/

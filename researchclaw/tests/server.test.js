@@ -361,3 +361,125 @@ test("GET /stream forwards cli_chunk events from a real ClaudeCodeAdapter run", 
     await server.close();
   }
 });
+
+// --- M3.3: consult endpoints + consult_message over SSE ---
+
+const CONSULT_STREAM = readFileSync(
+  fileURLToPath(new URL("../../fixtures/cli/consult.stream.jsonl", import.meta.url)),
+  "utf8"
+).trim().split("\n");
+
+// Fake spawn replaying the recorded consult stream-json (free-form: no out.json).
+function stubConsultSpawn(_cmd, _args, opts) {
+  const child = new EventEmitter();
+  child.stdout = new PassThrough();
+  child.stderr = new PassThrough();
+  child.kill = () => child.emit("close", null);
+  setImmediate(() => {
+    for (const line of CONSULT_STREAM) child.stdout.write(`${line}\n`);
+    child.stdout.end();
+    child.stderr.end();
+    child.emit("close", 0);
+  });
+  return child;
+}
+
+function consultServer() {
+  return startTestServer(null, {
+    buildAdapter: (eventBus) => {
+      const costTracker = new CostTracker();
+      const primary = new ClaudeCodeAdapter({ eventBus, costTracker, config: { timeoutMs: 5000 }, spawnImpl: stubConsultSpawn });
+      return createRoutingAdapter({ phases: ["contract_draft"], primary, fallback: new MockModelAdapter(), costTracker, eventBus });
+    }
+  });
+}
+
+async function waitForConsult(server, projectId) {
+  for (let i = 0; i < 200; i += 1) {
+    const st = server.store.readState(projectId);
+    if (st.consult?.raw_log_refs?.length) return st;
+    await new Promise((r) => setTimeout(r, 10));
+  }
+  return server.store.readState(projectId);
+}
+
+test("POST /consult honestly reports unavailable on a mock-only server", async () => {
+  const server = await startTestServer(); // plain mock, no consult
+  try {
+    const res = await postJson(server.baseUrl, "/projects/proj_c/consult", { message: "hi?" });
+    assert.equal(res.body.ok, false);
+    assert.equal(res.body.error.code, "unavailable");
+  } finally {
+    await server.close();
+  }
+});
+
+test("POST /consult runs a turn in the background and lands a consult raw_log", async () => {
+  const server = await consultServer();
+  try {
+    const projectId = "proj_consult_http";
+    const res = await postJson(server.baseUrl, `/projects/${projectId}/consult`, { message: "How can diffusion models help forecasting?" });
+    assert.equal(res.body.ok, true);
+    assert.equal(res.body.running, true);
+
+    const state = await waitForConsult(server, projectId);
+    assert.equal(state.consult.raw_log_refs.length, 1);
+    assert.equal(state.phase, "idle", "consult must not advance the research phase");
+    const raw = server.store.readArtifact(projectId, state.consult.raw_log_refs[0]);
+    assert.equal(raw.producer.workflow, "consult");
+    assert.ok(raw.content.answer_text.includes("predictive distribution"));
+  } finally {
+    await server.close();
+  }
+});
+
+test("GET /stream forwards a consult_message event after a consult turn", async () => {
+  const server = await consultServer();
+  try {
+    const projectId = "proj_consult_sse";
+    const messages = await readEvents(server.baseUrl, projectId, "consult_message", 1, () =>
+      postJson(server.baseUrl, `/projects/${projectId}/consult`, { message: "a question" })
+    );
+    assert.ok(messages.length >= 1);
+    assert.equal(messages[0].ok, true);
+    assert.ok(messages[0].raw_log_ref);
+  } finally {
+    await server.close();
+  }
+});
+
+test("POST /consult/promote promotes a consult turn to a consult_note", async () => {
+  const server = await consultServer();
+  try {
+    const projectId = "proj_consult_promote";
+    await postJson(server.baseUrl, `/projects/${projectId}/consult`, { message: "a question" });
+    const state = await waitForConsult(server, projectId);
+    const rawRef = state.consult.raw_log_refs[0];
+
+    const res = await postJson(server.baseUrl, `/projects/${projectId}/consult/promote`, { raw_log_ref: rawRef, note: "keep this" });
+    assert.equal(res.body.ok, true);
+    assert.ok(res.body.artifact_ref);
+    const note = server.store.readArtifact(projectId, res.body.artifact_ref);
+    assert.equal(note.type, "consult_note");
+    assert.equal(note.content.note, "keep this");
+  } finally {
+    await server.close();
+  }
+});
+
+// --- Gap 2: /health endpoint (gateway status) ---
+
+test("GET /health returns ok with project count", async () => {
+  const server = await startTestServer();
+  try {
+    await startAndWait(server, "proj_h");
+    const res = await getJson(server.baseUrl, "/health");
+    assert.equal(res.status, 200);
+    assert.equal(res.body.ok, true);
+    assert.equal(res.body.service, "researchclaw");
+    assert.equal(typeof res.body.projects, "number");
+    assert.ok(res.body.projects >= 1);
+  } finally {
+    await server.close();
+  }
+});

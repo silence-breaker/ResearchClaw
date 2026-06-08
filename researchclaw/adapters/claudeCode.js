@@ -19,6 +19,11 @@ function roleForPhase(phase) {
   return ROLE_BY_PHASE[phase] || "执行";
 }
 
+// consult is a conversation, not a long task: read-only tools (no Write/Bash)
+// and a small turn cap. See M3技术路线-后端 §9.
+const CONSULT_ALLOWED_TOOLS = "Read,WebSearch";
+const CONSULT_MAX_TURNS = 8;
+
 function fail(code, message, retryable = true) {
   return { ok: false, adapter: "claude", error: { code, message, retryable } };
 }
@@ -121,35 +126,39 @@ export class ClaudeCodeAdapter {
   }
 
   // Turn one stream-json event into process-feed chunks. Only text + tool_use
-  // are surfaced; raw event noise stays in the transcript.
-  handleEventChunks(event, request) {
+  // are surfaced; raw event noise stays in the transcript. consult mode tags the
+  // chunk with kind:"consult" + role 对话 so the panel routes it to the chat view
+  // instead of the workflow process feed (workflow chunks are left unchanged).
+  handleEventChunks(event, request, mode = "workflow") {
     if (event.type !== "assistant" || !event.message?.content) {
       return [];
     }
-    const role = roleForPhase(request.phase);
+    const consult = mode === "consult";
+    const role = consult ? "对话" : roleForPhase(request.phase);
     const ts = this.now();
     const texts = [];
     for (const block of event.message.content) {
       if (block.type === "text" && block.text) {
-        this.emitChunk(request, { phase: request.phase, role, text: block.text, ts });
+        this.emitChunk(request, consult ? { kind: "consult", role, text: block.text, ts } : { phase: request.phase, role, text: block.text, ts });
         texts.push(block.text);
       } else if (block.type === "tool_use") {
-        this.emitChunk(request, { phase: request.phase, role, tool: block.name, ts });
+        this.emitChunk(request, consult ? { kind: "consult", role, tool: block.name, ts } : { phase: request.phase, role, tool: block.name, ts });
       }
     }
     return texts;
   }
 
-  consume(child, request) {
+  consume(child, request, mode = "workflow") {
     return new Promise((resolve) => {
       let buffer = "";
       const transcriptLines = [];
       const texts = [];
       let stderr = "";
-      let usage = { input_tokens: 0, output_tokens: 0 };
+      let usage = { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
       let turns = 0;
       let durationMs = 0;
       let model = this.config.model;
+      let sessionId = null;
       let timedOut = false;
 
       const timer = setTimeout(() => {
@@ -173,13 +182,22 @@ export class ClaudeCodeAdapter {
         } catch {
           return; // tolerate a malformed line, keep going
         }
-        texts.push(...this.handleEventChunks(event, request));
+        texts.push(...this.handleEventChunks(event, request, mode));
+        if (event.session_id) {
+          sessionId = event.session_id;
+        }
         if (event.type === "system" && event.model) {
           model = event.model;
         }
         if (event.type === "result") {
           if (event.usage) {
-            usage = { input_tokens: event.usage.input_tokens ?? 0, output_tokens: event.usage.output_tokens ?? 0 };
+            usage = {
+              input_tokens: event.usage.input_tokens ?? 0,
+              output_tokens: event.usage.output_tokens ?? 0,
+              // cache reads dominate real spend; M4 counts them so cost isn't underestimated.
+              cache_creation_input_tokens: event.usage.cache_creation_input_tokens ?? 0,
+              cache_read_input_tokens: event.usage.cache_read_input_tokens ?? 0
+            };
           }
           turns = event.num_turns ?? turns;
           durationMs = event.duration_ms ?? durationMs;
@@ -208,6 +226,7 @@ export class ClaudeCodeAdapter {
         resolve({
           transcript: transcriptLines.join("\n"),
           usage: { ...usage, model, turns, duration_ms: durationMs },
+          sessionId,
           texts,
           stderr,
           timedOut,
@@ -256,6 +275,73 @@ export class ClaudeCodeAdapter {
         ok: true,
         adapter: "claude",
         output: out,
+        usage: consumed.usage,
+        raw: { transcript: consumed.transcript, summary }
+      };
+    } finally {
+      sandbox.cleanup();
+    }
+  }
+
+  // consult mode args: free-form (no forced schema / no out.json), read-only
+  // tools (consult never writes), bounded turns, and --resume to continue the
+  // per-project conversation thread. See M3技术路线-后端 §5.
+  buildConsultArgs(message, sessionId) {
+    const args = [
+      "-p",
+      message,
+      "--model",
+      this.config.model,
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      "--allowedTools",
+      CONSULT_ALLOWED_TOOLS,
+      "--max-turns",
+      String(Math.min(this.config.maxTurns, CONSULT_MAX_TURNS))
+    ];
+    if (sessionId) {
+      args.push("--resume", sessionId);
+    }
+    return args;
+  }
+
+  // consult mode (human one-shot Q&A). Free-form text, multi-turn via --resume.
+  // Returns { ok, session_id, text, usage, raw } — never structured/gated output.
+  // consult NEVER advances research state; the orchestrator lands it as a
+  // consult raw_log only (两通道红线 §2.1). On failure returns an honest error;
+  // unlike workflow mode, consult does NOT fall back to mock (a fake reply would
+  // break the red line — there is no pipeline to keep alive).
+  async consult(request) {
+    const sandbox = this.sandboxFactory();
+    try {
+      const child = this.spawnImpl(this.config.bin, this.buildConsultArgs(request.message, request.session_id), {
+        cwd: sandbox.dir,
+        env: this.buildEnv()
+      });
+      const consumed = await this.consume(child, request, "consult");
+
+      if (consumed.timedOut) {
+        return fail("timeout", `Consult run exceeded ${this.config.timeoutMs}ms`);
+      }
+      const text = consumed.texts.join("\n").trim();
+      if (!text) {
+        const detail = consumed.stderr ? ` (stderr: ${consumed.stderr.trim()})` : "";
+        return fail("empty_reply", `Consult produced no assistant text${detail}`);
+      }
+
+      const summary = {
+        model: consumed.usage.model,
+        time: this.now(),
+        role: "对话",
+        summary: text.slice(0, 280),
+        artifact_refs: []
+      };
+      return {
+        ok: true,
+        adapter: "claude",
+        session_id: consumed.sessionId || request.session_id || null,
+        text,
         usage: consumed.usage,
         raw: { transcript: consumed.transcript, summary }
       };
