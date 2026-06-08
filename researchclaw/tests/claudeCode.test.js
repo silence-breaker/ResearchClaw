@@ -139,3 +139,41 @@ test("isAvailable reflects whether the claude binary is present", () => {
   assert.equal(ClaudeCodeAdapter.isAvailable({ which: () => null }), false);
   assert.equal(ClaudeCodeAdapter.isAvailable({ which: () => "/usr/bin/claude" }), true);
 });
+
+test("buildEnv overrides the API endpoint per-spawn when a baseUrl is configured", () => {
+  const adapter = new ClaudeCodeAdapter({
+    config: { baseUrl: "https://yunwu.example", apiKey: "sk-rc-key" },
+    spawnImpl: () => {}
+  });
+  const base = { PATH: "/bin", ANTHROPIC_BASE_URL: "https://cc-switch.example", ANTHROPIC_AUTH_TOKEN: "cc-tok", ANTHROPIC_API_KEY: "cc-key" };
+  const env = adapter.buildEnv(base);
+  assert.equal(env.ANTHROPIC_BASE_URL, "https://yunwu.example");
+  assert.equal(env.ANTHROPIC_AUTH_TOKEN, "sk-rc-key");
+  assert.equal(env.ANTHROPIC_API_KEY, undefined, "stale API key must be dropped to avoid 401");
+  assert.equal(env.PATH, "/bin");
+  assert.equal(base.ANTHROPIC_BASE_URL, "https://cc-switch.example", "must not mutate the source env (cc-switch untouched)");
+});
+
+test("buildEnv inherits the environment unchanged when no baseUrl is configured", () => {
+  const adapter = new ClaudeCodeAdapter({ config: {}, spawnImpl: () => {} });
+  const base = { ANTHROPIC_BASE_URL: "https://cc-switch.example", ANTHROPIC_AUTH_TOKEN: "cc-tok" };
+  const env = adapter.buildEnv(base);
+  assert.equal(env.ANTHROPIC_BASE_URL, "https://cc-switch.example");
+  assert.equal(env.ANTHROPIC_AUTH_TOKEN, "cc-tok");
+});
+
+test("run passes the overriding env to the spawned process", async () => {
+  let captured;
+  const spawnImpl = (cmd, args, opts) => {
+    captured = opts.env;
+    return makeStub({ lines: streamLines(), outContent: outFixture() })(cmd, args, opts);
+  };
+  const adapter = new ClaudeCodeAdapter({
+    eventBus: new EventBus(),
+    config: { model: "claude-haiku-4-5-20251001", maxTurns: 20, timeoutMs: 120000, baseUrl: "https://yunwu.example", apiKey: "sk-rc-key" },
+    spawnImpl
+  });
+  await adapter.run(request());
+  assert.equal(captured.ANTHROPIC_BASE_URL, "https://yunwu.example");
+  assert.equal(captured.ANTHROPIC_AUTH_TOKEN, "sk-rc-key");
+});

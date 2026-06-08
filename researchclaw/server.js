@@ -5,6 +5,7 @@ import { URL, fileURLToPath } from "node:url";
 import { MockModelAdapter } from "./adapters/mock.js";
 import { ClaudeCodeAdapter } from "./adapters/claudeCode.js";
 import { resolveClaudeModel } from "./adapters/claudeConfig.js";
+import { loadProviders } from "./adapters/providers.js";
 import { createRoutingAdapter } from "./adapters/route.js";
 import { CostTracker } from "./engine/cost.js";
 import { EventBus } from "./engine/events.js";
@@ -26,16 +27,16 @@ function buildAdapter(eventBus) {
     }
     return { adapter: new MockModelAdapter(), costTracker: null };
   }
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.warn("[researchclaw] No ANTHROPIC_API_KEY in env — relying on `claude` subscription login; a failed run will degrade to mock.");
-  }
-  // Resolve the Haiku model id (env override → env haiku → ~/.claude/settings.json
-  // haiku → alias). Reading settings.json covers the cc-switch case where the var
-  // is only in claude's config, not the npm-run-dev shell. Never ANTHROPIC_MODEL
-  // (often Opus on a relay) — cost red line.
-  const model = resolveClaudeModel();
+  // ResearchClaw-only model provider from API.md (e.g. yunwu.ai), applied
+  // per-spawn so the global cc-switch config is untouched. Falls back to the
+  // inherited cc-switch endpoint + resolved Haiku id when API.md has no claude.
+  const claudeProvider = loadProviders().claude;
+  const model = claudeProvider?.model || resolveClaudeModel();
   if (!/haiku/i.test(model)) {
     console.warn(`[researchclaw] ⚠ non-Haiku model ${model} — Haiku is the cost-safe default; proceed only if intentional.`);
+  }
+  if (!claudeProvider && !process.env.ANTHROPIC_API_KEY) {
+    console.warn("[researchclaw] No API.md provider and no ANTHROPIC_API_KEY — relying on `claude` subscription login; a failed run degrades to mock.");
   }
   const costTracker = new CostTracker({
     sessionBudgetUsd: process.env.RESEARCHCLAW_SESSION_BUDGET_USD
@@ -49,7 +50,9 @@ function buildAdapter(eventBus) {
       model,
       maxTurns: process.env.RESEARCHCLAW_MAX_TURNS ? Number(process.env.RESEARCHCLAW_MAX_TURNS) : 20,
       timeoutMs: process.env.RESEARCHCLAW_TIMEOUT_MS ? Number(process.env.RESEARCHCLAW_TIMEOUT_MS) : 120000,
-      available: true
+      available: true,
+      baseUrl: claudeProvider?.baseUrl || null,
+      apiKey: claudeProvider?.apiKey || null
     }
   });
   const adapter = createRoutingAdapter({
@@ -59,7 +62,8 @@ function buildAdapter(eventBus) {
     costTracker,
     eventBus
   });
-  console.log(`[researchclaw] Claude Code enabled for contract_draft (model=${model}).`);
+  const endpoint = claudeProvider ? new URL(claudeProvider.baseUrl).host : "cc-switch (inherited)";
+  console.log(`[researchclaw] Claude Code enabled for contract_draft (model=${model}, endpoint=${endpoint}).`);
   return { adapter, costTracker };
 }
 

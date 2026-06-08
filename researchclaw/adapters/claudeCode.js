@@ -49,7 +49,11 @@ export class ClaudeCodeAdapter {
   } = {}) {
     this.eventBus = eventBus;
     this.costTracker = costTracker;
-    this.config = { model: "claude-haiku-4-5", maxTurns: 20, timeoutMs: 120000, bin: "claude", ...config };
+    // baseUrl/apiKey (when set) point this adapter at a ResearchClaw-only model
+    // provider (e.g. yunwu.ai), applied per-spawn so the global cc-switch config
+    // (~/.claude/settings.json) is never touched. Per-process env wins over
+    // settings.json env (verified empirically).
+    this.config = { model: "claude-haiku-4-5", maxTurns: 20, timeoutMs: 120000, bin: "claude", baseUrl: null, apiKey: null, ...config };
     this.spawnImpl = spawnImpl;
     this.sandboxFactory = sandboxFactory;
     this.now = now;
@@ -94,6 +98,22 @@ export class ClaudeCodeAdapter {
       "--max-turns",
       String(this.config.maxTurns)
     ];
+  }
+
+  // The child process env. When a ResearchClaw-only provider is configured,
+  // override ANTHROPIC_BASE_URL/AUTH_TOKEN and drop any inherited ANTHROPIC_API_KEY
+  // (avoids a stale-key 401). Otherwise inherit unchanged. Never mutates baseEnv.
+  buildEnv(baseEnv = process.env) {
+    if (!this.config.baseUrl) {
+      return { ...baseEnv };
+    }
+    const env = { ...baseEnv };
+    delete env.ANTHROPIC_API_KEY;
+    env.ANTHROPIC_BASE_URL = this.config.baseUrl;
+    if (this.config.apiKey) {
+      env.ANTHROPIC_AUTH_TOKEN = this.config.apiKey;
+    }
+    return env;
   }
 
   emitChunk(request, data) {
@@ -202,7 +222,10 @@ export class ClaudeCodeAdapter {
     const sandbox = this.sandboxFactory();
     try {
       const prompt = this.buildPrompt(request, schema);
-      const child = this.spawnImpl(this.config.bin, this.buildArgs(prompt), { cwd: sandbox.dir });
+      const child = this.spawnImpl(this.config.bin, this.buildArgs(prompt), {
+        cwd: sandbox.dir,
+        env: this.buildEnv()
+      });
       const consumed = await this.consume(child, request);
 
       if (consumed.timedOut) {
