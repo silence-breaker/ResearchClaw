@@ -26,6 +26,22 @@ class BadBaselineAdapter extends MockModelAdapter {
   }
 }
 
+// Fails the first contract_draft attempt, then succeeds. Used to test recover
+// from a contract_draft failure through the HTTP layer.
+class FailsOnceDraftAdapter extends MockModelAdapter {
+  constructor() {
+    super();
+    this.failures = 0;
+  }
+  async run(request) {
+    if (request.phase === "contract_draft" && this.failures === 0) {
+      this.failures += 1;
+      return { ok: false, adapter: "mock", error: { code: "boom", message: "draft exploded once", retryable: false } };
+    }
+    return super.run(request);
+  }
+}
+
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -140,6 +156,42 @@ test("POST /recover on a non-blocked project returns an error", async () => {
     assert.equal(result.status, 500);
     assert.equal(result.body.ok, false);
     assert.match(result.body.error, /blocked/);
+  } finally {
+    await server.close();
+  }
+});
+
+test("POST /recover from a contract_draft failure schedules a background re-run", async () => {
+  const server = await startTestServer(new FailsOnceDraftAdapter());
+  const projectId = "proj_recover_draft";
+  try {
+    await postJson(server.baseUrl, `/projects/${projectId}/start`, {
+      research_direction: "Explore retrieval reranking"
+    });
+    // Wait for the initial background draft to fail and land in blocked.
+    for (let i = 0; i < 200; i += 1) {
+      const st = server.store.readState(projectId);
+      if (st.phase === "blocked") break;
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    assert.equal(server.store.readState(projectId).phase, "blocked");
+    assert.equal(server.store.readState(projectId).block.retreat_to, "contract_draft");
+
+    const result = await postJson(server.baseUrl, `/projects/${projectId}/recover`, {});
+    assert.equal(result.status, 200);
+    assert.equal(result.body.ok, true);
+    assert.equal(result.body.phase, "contract_draft");
+    assert.equal(result.body.needs_draft, true);
+
+    // Wait for the server-scheduled background re-run to complete.
+    for (let i = 0; i < 200; i += 1) {
+      const st = server.store.readState(projectId);
+      if (st.phase !== "contract_draft" && st.phase !== "blocked") break;
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    const finalState = server.store.readState(projectId);
+    assert.equal(finalState.phase, "contract_review");
+    assert.ok(finalState.current.contract_artifact_ref);
   } finally {
     await server.close();
   }

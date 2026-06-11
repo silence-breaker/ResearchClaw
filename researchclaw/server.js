@@ -270,6 +270,9 @@ export function createResearchServer({ store, orchestrator, eventBus = null, web
       const body = await readJsonBody(req);
       const result = await orchestrator.recover(recoverMatch[1], body);
       sendJson(res, 200, result);
+      if (result.needs_draft) {
+        orchestrator.executeContractRun(recoverMatch[1]).catch(() => {});
+      }
       return;
     }
 

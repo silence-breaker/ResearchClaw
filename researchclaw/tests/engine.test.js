@@ -142,6 +142,49 @@ test("a draft workflow failure lands the project in blocked, not a crash", async
   assert.ok((state.block.errors || []).some((e) => e.includes("draft exploded")));
 });
 
+test("a draft workflow failure leaves a recoverable retreat target", async () => {
+  const { store, orchestrator } = createTempHarness(new ThrowingDraftAdapter());
+  await orchestrator.beginDraftFromText("proj_async", "Explore retrieval reranking");
+  await orchestrator.executeContractRun("proj_async");
+  const state = store.readState("proj_async");
+  assert.equal(state.block.failed_phase, "contract_draft");
+  assert.equal(state.block.retreat_to, "contract_draft");
+  assert.equal(state.pending_human_actions[0].retreat_to, "contract_draft");
+});
+
+class FailsOnceDraftAdapter extends MockModelAdapter {
+  constructor() {
+    super();
+    this.failures = 0;
+  }
+  async run(request) {
+    if (request.phase === "contract_draft" && this.failures === 0) {
+      this.failures += 1;
+      return { ok: false, adapter: "mock", error: { code: "boom", message: "draft exploded once", retryable: false } };
+    }
+    return super.run(request);
+  }
+}
+
+test("recover from a contract_draft failure re-runs the draft", async () => {
+  const { store, orchestrator } = createTempHarness(new FailsOnceDraftAdapter());
+  await orchestrator.beginDraftFromText("proj_async", "Explore retrieval reranking");
+  await orchestrator.executeContractRun("proj_async");
+  assert.equal(store.readState("proj_async").phase, "blocked");
+
+  const recoverResult = await orchestrator.recover("proj_async");
+  assert.equal(recoverResult.needs_draft, true, "recover should signal that contract_draft needs a background run");
+  const recovered = store.readState("proj_async");
+  assert.equal(recovered.phase, "contract_draft");
+  assert.equal(recovered.block, undefined);
+  assert.equal(recovered.pending_human_actions[0].type, "phase_running");
+
+  await orchestrator.executeContractRun("proj_async");
+  const after = store.readState("proj_async");
+  assert.equal(after.phase, "contract_review");
+  assert.ok(after.current.contract_artifact_ref);
+});
+
 test("beginRevise + executeContractRun produces a revised version asynchronously", async () => {
   const { store, orchestrator } = createTempHarness();
   await orchestrator.startFromText("proj_async", "Explore retrieval reranking");

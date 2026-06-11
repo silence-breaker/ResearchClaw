@@ -42,6 +42,7 @@ const phaseRunLabels = {
 // When a phase gate fails, which re-runnable upstream phase to fall back to.
 // blocked stays the visible state, but it carries this target so recover() can leave it.
 const retreatTargets = {
+  contract_draft: "contract_draft",
   literature_scouting: "literature_scouting",
   baseline_selection: "literature_scouting",
   baseline_reproduction_checklist: "baseline_selection",
@@ -405,13 +406,14 @@ export class ResearchOrchestrator {
 
   _failContractRun(projectId, err) {
     const state = this.store.readState(projectId);
+    const retreatTo = retreatTargets.contract_draft;
     state.phase = "blocked";
-    state.block = { failed_phase: "contract_draft", retreat_to: null, errors: [String(err?.message || err)] };
+    state.block = { failed_phase: "contract_draft", retreat_to: retreatTo, errors: [String(err?.message || err)] };
     state.pending_human_actions = [
       {
         type: "revise_required",
         phase: "contract_draft",
-        retreat_to: null,
+        retreat_to: retreatTo,
         errors: state.block.errors,
         label: "契约起草失败，可重新发起"
       }
@@ -930,6 +932,20 @@ export class ResearchOrchestrator {
     }
     state.phase = target;
     delete state.block;
+
+    // contract_draft is special: it is run asynchronously via executeContractRun
+    // (like /start and /revise), not via advance(). Set up the pending run context
+    // and signal that the caller should schedule executeContractRun.
+    if (target === "contract_draft") {
+      this.eventBus?.clearCliChunks?.(projectId);
+      this.pendingRun.set(projectId, { kind: "draft" });
+      state.pending_human_actions = [
+        { type: "phase_running", phase: "contract_draft", label: "Claude 重新起草研究契约中…" }
+      ];
+      const result = this.finishManual(state, ["contract_draft_running"]);
+      return { ...result, needs_draft: true };
+    }
+
     setRunPhaseAction(state, target);
     recordPhase(state, target, [], "manual");
     return this.finishManual(state, [`recovered_to_${target}`]);
