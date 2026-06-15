@@ -5,13 +5,15 @@ import { URL, fileURLToPath } from "node:url";
 import { MockModelAdapter } from "./adapters/mock.js";
 import { ClaudeCodeAdapter } from "./adapters/claudeCode.js";
 import { resolveClaudeModel } from "./adapters/claudeConfig.js";
-import { loadProviders } from "./adapters/providers.js";
+import { getProviderStatus, loadProviders } from "./adapters/providers.js";
 import { createRoutingAdapter } from "./adapters/route.js";
 import { CostTracker } from "./engine/cost.js";
 import { EventBus } from "./engine/events.js";
 import { ResearchOrchestrator } from "./engine/orchestrator.js";
 import { FileEvidenceStore } from "./evidence/store.js";
 import { handleOpenClawPayload } from "./gateway.js";
+import { checkCliStatus } from "./settings/cliStatus.js";
+import { resolveCliPolicy, saveCliPolicy } from "./settings/cliPolicy.js";
 import { renderIndexPage, renderPanelPage } from "./ui.js";
 
 // Builds the model adapter wiring from env. Defaults to pure mock (current
@@ -152,6 +154,47 @@ export function createResearchServer({ store, orchestrator, eventBus = null, web
         ok: true,
         service: "researchclaw",
         projects: store.listProjectIds().length
+      });
+      return;
+    }
+
+    // System-level provider status: sanitized view of API.md claude/codex/gemini section.
+    // No API keys, no full URLs, no openclaw section.
+    if (req.method === "GET" && url.pathname === "/system/providers") {
+      const providers = getProviderStatus();
+      sendJson(res, 200, { ok: true, providers });
+      return;
+    }
+
+    // System-level CLI availability: lightweight PATH check for claude/gemini/codex binaries.
+    if (req.method === "GET" && url.pathname === "/system/cli-status") {
+      const clis = await checkCliStatus();
+      sendJson(res, 200, { ok: true, clis });
+      return;
+    }
+
+    // V3-M2: per-phase provider/CLI/model execution policy. GET returns the
+    // effective policy + defaults; PUT validates and persists a partial overlay.
+    // Settings live next to the evidence store so each deployment/test harness is
+    // isolated and does not accidentally read the current working directory config.
+    if (req.method === "GET" && url.pathname === "/settings/cli-policy") {
+      const { policy, defaults, fallbackPolicy } = resolveCliPolicy({ settingsDir: store.rootDir });
+      sendJson(res, 200, { ok: true, policy, defaults, fallbackPolicy });
+      return;
+    }
+
+    if (req.method === "PUT" && url.pathname === "/settings/cli-policy") {
+      const body = await readJsonBody(req);
+      const result = saveCliPolicy(body.policy || {}, { settingsDir: store.rootDir });
+      if (!result.ok) {
+        sendJson(res, 400, { ok: false, errors: result.errors });
+        return;
+      }
+      sendJson(res, 200, {
+        ok: true,
+        policy: result.policy,
+        defaults: result.defaults,
+        fallbackPolicy: result.fallbackPolicy
       });
       return;
     }

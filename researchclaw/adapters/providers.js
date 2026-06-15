@@ -42,6 +42,14 @@ function provider(baseUrl, apiKey, model) {
   return baseUrl && apiKey ? { baseUrl, apiKey, model } : null;
 }
 
+function hostFromUrl(url) {
+  try {
+    return new URL(url).host;
+  } catch {
+    return "";
+  }
+}
+
 // Loads the ResearchClaw-only provider config (claude/gemini/codex) from API.md,
 // with env overrides for claude. Missing/partial config → null for that provider
 // (the adapter then inherits the global cc-switch env, i.e. feature off).
@@ -60,4 +68,36 @@ export function loadProviders({ apiMdPath = DEFAULT_API_MD, env = process.env } 
     gemini: provider(parsed.geminiBaseUrl, parsed.apiKey, pickModel(parsed.models, /gemini/i)),
     codex: provider(parsed.openaiBaseUrl, parsed.apiKey, pickModel(parsed.models, /gpt|codex/i))
   };
+}
+
+// Returns a sanitized, frontend-safe view of the configured providers. API keys,
+// full URLs with query parameters, and non-whitelist sections are never exposed.
+export function getProviderStatus({ apiMdPath = DEFAULT_API_MD, env = process.env } = {}) {
+  let parsed = { apiKey: null, claudeBaseUrl: null, geminiBaseUrl: null, openaiBaseUrl: null, models: [] };
+  try {
+    parsed = parseApiMd(readFileSync(apiMdPath, "utf8"));
+  } catch {
+    /* no API.md → all providers unconfigured */
+  }
+  const providers = loadProviders({ apiMdPath, env });
+  return [
+    {
+      id: "claude",
+      configured: providers.claude !== null,
+      baseUrlHost: providers.claude ? hostFromUrl(providers.claude.baseUrl) : hostFromUrl(parsed.claudeBaseUrl),
+      models: parsed.models.filter((m) => /claude/i.test(m))
+    },
+    {
+      id: "gemini",
+      configured: providers.gemini !== null,
+      baseUrlHost: providers.gemini ? hostFromUrl(providers.gemini.baseUrl) : hostFromUrl(parsed.geminiBaseUrl),
+      models: parsed.models.filter((m) => /gemini/i.test(m))
+    },
+    {
+      id: "codex",
+      configured: providers.codex !== null,
+      baseUrlHost: providers.codex ? hostFromUrl(providers.codex.baseUrl) : hostFromUrl(parsed.openaiBaseUrl),
+      models: parsed.models.filter((m) => /gpt|codex/i.test(m))
+    }
+  ];
 }

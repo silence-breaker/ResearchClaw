@@ -1,4 +1,15 @@
-import type { Artifact, EvidencePreview, HealthStatus, ProjectState, ProjectSummary } from "./types";
+import type {
+  Artifact,
+  CliStatus,
+  EvidencePreview,
+  HealthStatus,
+  PhaseCliEntry,
+  PhaseCliPolicyResponse,
+  ProviderStatus,
+  ProjectState,
+  ProjectSummary,
+  ResearchPhase
+} from "./types";
 
 async function getJson<T>(path: string): Promise<T> {
   const res = await fetch(path, { headers: { Accept: "application/json" } });
@@ -15,6 +26,29 @@ export async function fetchProjects(): Promise<ProjectSummary[]> {
 
 export async function fetchHealth(): Promise<HealthStatus> {
   return getJson<HealthStatus>("/health");
+}
+
+// V3-M1: sanitized provider configuration (no API keys).
+export async function fetchProviders(): Promise<ProviderStatus[]> {
+  const body = await getJson<{ ok: boolean; providers: ProviderStatus[] }>("/system/providers");
+  return body.providers ?? [];
+}
+
+// V3-M1: CLI binary availability on the server host.
+export async function fetchCliStatus(): Promise<CliStatus[]> {
+  const body = await getJson<{ ok: boolean; clis: CliStatus[] }>("/system/cli-status");
+  return body.clis ?? [];
+}
+
+// V3-M2: per-phase provider/CLI/model execution policy.
+export async function fetchCliPolicy(): Promise<PhaseCliPolicyResponse> {
+  return getJson<PhaseCliPolicyResponse>("/settings/cli-policy");
+}
+
+export async function updateCliPolicy(
+  policy: Partial<Record<ResearchPhase, PhaseCliEntry>>
+): Promise<PhaseCliPolicyResponse> {
+  return postJson<PhaseCliPolicyResponse>("/settings/cli-policy", { policy });
 }
 
 export async function fetchState(projectId: string): Promise<ProjectState> {

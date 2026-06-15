@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadProviders, parseApiMd } from "../adapters/providers.js";
+import { getProviderStatus, loadProviders, parseApiMd } from "../adapters/providers.js";
 
 // Synthetic API.md (fake key) mirroring the real format — never commit a real key.
 const SAMPLE = `# openclaw
@@ -67,4 +67,40 @@ test("a partial claude config (base but no key) is treated as not configured", (
   const path = writeSample("# claude, codex, gemini\nclaude_base_url = https://yunwu.example\n");
   const providers = loadProviders({ apiMdPath: path, env: {} });
   assert.equal(providers.claude, null);
+});
+
+test("getProviderStatus returns sanitized status for all three providers", () => {
+  const status = getProviderStatus({ apiMdPath: writeSample(), env: {} });
+  assert.equal(status.length, 3);
+
+  const claude = status.find((p) => p.id === "claude");
+  assert.equal(claude.configured, true);
+  assert.equal(claude.baseUrlHost, "yunwu.example");
+  assert.deepEqual(claude.models, ["claude-haiku-4-5-20251001"]);
+
+  const gemini = status.find((p) => p.id === "gemini");
+  assert.equal(gemini.configured, true);
+  assert.equal(gemini.baseUrlHost, "yunwu.example");
+  assert.deepEqual(gemini.models, ["gemini-3.1-flash-lite"]);
+
+  const codex = status.find((p) => p.id === "codex");
+  assert.equal(codex.configured, true);
+  assert.equal(codex.baseUrlHost, "yunwu.example");
+  assert.deepEqual(codex.models, ["gpt-5.4-mini"]);
+});
+
+test("getProviderStatus never exposes API keys or openclaw section", () => {
+  const status = getProviderStatus({ apiMdPath: writeSample(), env: {} });
+  const json = JSON.stringify(status);
+  assert.equal(json.includes("sk-FAKEproviderkey123"), false);
+  assert.equal(json.includes("tp-fake-openclaw-key"), false);
+  assert.equal(json.includes("token-plan-cn"), false);
+});
+
+test("getProviderStatus marks providers unconfigured when API.md is missing", () => {
+  const status = getProviderStatus({ apiMdPath: "/no/such/API.md", env: {} });
+  for (const p of status) {
+    assert.equal(p.configured, false);
+    assert.deepEqual(p.models, []);
+  }
 });

@@ -177,6 +177,38 @@ export interface HealthStatus {
   projects?: number;
 }
 
+// V3-M1: sanitized provider status from API.md claude/codex/gemini section.
+export type CliProvider = "claude" | "gemini" | "codex" | "mock";
+export type CliId = "claude-code" | "gemini-cli" | "codex-cli" | "mock";
+
+export interface ProviderStatus {
+  id: CliProvider;
+  configured: boolean;
+  baseUrlHost: string;
+  models: string[];
+}
+
+// V3-M1: CLI binary availability on the server host.
+export interface CliStatus {
+  id: CliId;
+  provider: CliProvider;
+  available: boolean;
+  command: string;
+}
+
+export interface PhaseCliEntry {
+  provider: CliProvider;
+  cli: CliId;
+  model?: string;
+}
+
+export interface PhaseCliPolicyResponse {
+  ok: boolean;
+  policy: Partial<Record<ResearchPhase, PhaseCliEntry>>;
+  defaults: Partial<Record<ResearchPhase, PhaseCliEntry>>;
+  fallbackPolicy: Partial<Record<ResearchPhase, PhaseCliEntry>>;
+}
+
 export type ArtifactType =
   | "contract"
   | "paper_cards"

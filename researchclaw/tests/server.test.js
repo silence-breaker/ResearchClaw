@@ -535,3 +535,108 @@ test("GET /health returns ok with project count", async () => {
     await server.close();
   }
 });
+
+
+// --- V3-M1: system provider / CLI status endpoints ---
+
+test("GET /system/providers returns sanitized provider status without API keys", async () => {
+  const server = await startTestServer();
+  try {
+    const res = await getJson(server.baseUrl, "/system/providers");
+    assert.equal(res.status, 200);
+    assert.equal(res.body.ok, true);
+    assert.equal(Array.isArray(res.body.providers), true);
+    assert.equal(res.body.providers.length, 3);
+    const json = JSON.stringify(res.body);
+    assert.equal(json.includes("API_key"), false);
+    for (const p of res.body.providers) {
+      assert.ok(["claude", "gemini", "codex"].includes(p.id));
+      assert.equal(typeof p.configured, "boolean");
+      assert.equal("baseUrlHost" in p, true);
+      assert.equal(Array.isArray(p.models), true);
+      assert.equal("apiKey" in p, false);
+      assert.equal("baseUrl" in p, false);
+    }
+  } finally {
+    await server.close();
+  }
+});
+
+test("GET /system/cli-status returns CLI availability list", async () => {
+  const server = await startTestServer();
+  try {
+    const res = await getJson(server.baseUrl, "/system/cli-status");
+    assert.equal(res.status, 200);
+    assert.equal(res.body.ok, true);
+    assert.equal(Array.isArray(res.body.clis), true);
+    assert.equal(res.body.clis.length, 3);
+    for (const cli of res.body.clis) {
+      assert.ok(["claude-code", "gemini-cli", "codex-cli"].includes(cli.id));
+      assert.equal(typeof cli.available, "boolean");
+      assert.equal(typeof cli.command, "string");
+      assert.equal("apiKey" in cli, false);
+    }
+  } finally {
+    await server.close();
+  }
+});
+
+
+// --- V3-M2: phase CLI policy endpoints ---
+
+test("GET /settings/cli-policy returns defaults with no user override", async () => {
+  const server = await startTestServer();
+  try {
+    const res = await getJson(server.baseUrl, "/settings/cli-policy");
+    assert.equal(res.status, 200);
+    assert.equal(res.body.ok, true);
+    assert.equal(typeof res.body.policy, "object");
+    assert.equal(typeof res.body.defaults, "object");
+    assert.equal(typeof res.body.fallbackPolicy, "object");
+    assert.equal(res.body.policy.contract_draft.provider, "claude");
+    assert.equal(res.body.policy.literature_scouting.provider, "gemini");
+  } finally {
+    await server.close();
+  }
+});
+
+async function putJson(baseUrl, path, body) {
+  const res = await fetch(`${baseUrl}${path}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  return { status: res.status, body: await res.json() };
+}
+
+test("PUT /settings/cli-policy persists a valid partial overlay", async () => {
+  const server = await startTestServer();
+  try {
+    const putRes = await putJson(server.baseUrl, "/settings/cli-policy", {
+      policy: { literature_scouting: { provider: "mock", cli: "mock" } }
+    });
+    assert.equal(putRes.status, 200);
+    assert.equal(putRes.body.ok, true);
+    assert.equal(putRes.body.policy.literature_scouting.provider, "mock");
+    assert.equal(putRes.body.policy.contract_draft.provider, "claude");
+
+    const getRes = await getJson(server.baseUrl, "/settings/cli-policy");
+    assert.equal(getRes.body.policy.literature_scouting.provider, "mock");
+  } finally {
+    await server.close();
+  }
+});
+
+test("PUT /settings/cli-policy rejects invalid provider/cli mismatch", async () => {
+  const server = await startTestServer();
+  try {
+    const putRes = await putJson(server.baseUrl, "/settings/cli-policy", {
+      policy: { literature_scouting: { provider: "claude", cli: "gemini-cli", model: "claude-haiku-4-5-20251001" } }
+    });
+    assert.equal(putRes.status, 400);
+    assert.equal(putRes.body.ok, false);
+    assert.ok(Array.isArray(putRes.body.errors));
+  } finally {
+    await server.close();
+  }
+});
