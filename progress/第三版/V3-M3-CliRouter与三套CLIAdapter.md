@@ -1,6 +1,7 @@
 # ResearchClaw V3-M3 CliRouter 与三套 CLI Adapter
 
 > 阶段：V3-M3
+> 状态：**未完成（2026-07-09 代码核查）**
 > 目标：把当前 Claude primary + mock fallback 路由升级为 phase-aware 多 CLI router，并新增 Gemini/Codex CLI adapter
 > 前置：V3-M2 phase CLI policy 已后端化
 
@@ -13,6 +14,15 @@
 ```
 
 V3-M3 是 V3 的多 CLI 执行核心。
+
+2026-07-09 代码核查后的真实现状：
+
+- 当前 `researchclaw/adapters/route.js` 仍是 phase opted-in -> Claude primary -> mock fallback。
+- `researchclaw/server.js` 装配真实 Claude 时只传入 `phases: ["contract_draft"]`。
+- 未发现 `researchclaw/adapters/geminiCli.js`、`researchclaw/adapters/codexCli.js`、`researchclaw/adapters/cliRouter.js`。
+- 未发现 Gemini/Codex 的 spawn 执行链路。
+- `settings/cliPolicy.js` 已有默认 policy 和 `resolvePhasePolicy()`，但 orchestrator/router 尚未读取它来选择 adapter。
+- 因此 Gemini/Codex 当前不能算已接入，M3 仍是下一步核心开发任务。
 
 ---
 

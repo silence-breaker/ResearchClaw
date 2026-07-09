@@ -9,7 +9,9 @@
 ## 0. 一句话目标
 
 ```text
-Settings 不再只保存本地模型偏好，而是通过后端维护 phase → provider/CLI/model 的真实执行策略；后续 workflow 执行必须能读取这份策略。
+Settings 不再只保存本地模型偏好，而是通过后端维护 phase → provider/CLI/model 的策略配置；后续 workflow/router 必须能读取这份策略。
+
+截至 2026-07-09，M2 已完成策略配置、校验、持久化与 Settings 接入；执行层尚未消费该 policy。当前真实执行仍是 Claude Code + mock 路由，启用 Claude 时仅 `contract_draft` 走真实 Claude。
 ```
 
 V3-M2 只完成策略配置，不要求 Gemini/Codex adapter 已能真实执行。
@@ -26,7 +28,7 @@ V3-M2 只完成策略配置，不要求 Gemini/Codex adapter 已能真实执行�
 - 后端持久化 policy。
 - 校验 provider、CLI、model、phase 合法性。
 - Settings 页面支持逐 phase 选择 provider/CLI/model。
-- 保存后影响后续 phase 执行策略读取点。
+- 保存后为后续 phase 执行策略读取点提供数据源；当前 M2 不要求已被执行层消费。
 
 ### 1.2 明确不做
 
@@ -185,6 +187,7 @@ Settings 新增“模型/CLI 路由”页：
 - 非法配置不会写入。
 - policy API 不泄露 API key。
 - 后续 router 可通过 service 读取某个 phase 的执行策略。
+- 当前执行层仍未按 policy 路由；“修改某 phase CLI 后下一次执行即使用新 CLI”属于 V3-M3 验收，不属于 M2 已完成范围。
 
 ---
 

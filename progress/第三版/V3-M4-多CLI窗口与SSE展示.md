@@ -1,6 +1,7 @@
 # ResearchClaw V3-M4 多 CLI 窗口与 SSE 展示
 
 > 阶段：V3-M4
+> 状态：**未完成（2026-07-09 代码核查）**
 > 目标：让前端能区分 Claude Code、Gemini CLI、Codex CLI 的执行窗口、过程流、artifact 来源与成本来源
 > 前置：V3-M3 CliRouter 与三套 CLI Adapter 完成
 
@@ -13,6 +14,14 @@
 ```
 
 V3-M4 主要解决可视化与实时流，不改变科研状态机主逻辑。
+
+2026-07-09 代码核查后的真实现状：
+
+- `web/src/api/types.ts` 中 `CliChunk` 尚未包含 `provider/cli/model/windowId`。
+- `engine/events.js` 的 replay/buffer 仍未按 `windowId` 建模。
+- `web/src/components/RightColumn.tsx` 已有 Claude consult UI，但 Gemini/Codex 仍应视为未接入/disabled。
+- 由于 V3-M3 的 Gemini/Codex adapter 和 policy router 尚未完成，M4 的多 CLI 执行窗口还不能算完成。
+- M4 文档内容仍是目标设计，不是当前已验收状态。
 
 ---
 
