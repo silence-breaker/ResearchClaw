@@ -1,6 +1,6 @@
 import { spawn, execSync } from "node:child_process";
 import { getOutputSchema, validateOutput } from "./schemas.js";
-import { buildJsonPrompt, extractJsonObject, roleForPhase } from "./cliShared.js";
+import { buildJsonPrompt, extractJsonObject, roleForPhase, spawnCliWithPrompt } from "./cliShared.js";
 
 const PROVIDER = "codex";
 const CLI = "codex-cli";
@@ -14,8 +14,12 @@ function fail(code, message, retryable = true) {
 }
 
 function defaultWhich(bin) {
+  // `command -v` is a POSIX shell builtin and fails under Windows cmd.exe (the
+  // default execSync shell there), which would mark every real CLI "unavailable"
+  // and silently degrade to mock. Use `where` on win32, `command -v` elsewhere.
+  const probe = process.platform === "win32" ? `where ${bin}` : `command -v ${bin}`;
   try {
-    return execSync(`command -v ${bin}`, { stdio: ["ignore", "pipe", "ignore"] }).toString().trim() || null;
+    return execSync(probe, { stdio: ["ignore", "pipe", "ignore"] }).toString().trim() || null;
   } catch {
     return null;
   }
@@ -67,8 +71,10 @@ export class CodexCliAdapter {
 
   // TOML string values passed to `-c` must keep their quotes (codex parses the
   // value as a TOML fragment; a bare URL is not valid TOML). Each `-c` pair is a
-  // single argv element. The key is referenced by name (env_key), not value.
-  buildArgs(prompt) {
+  // single argv element. The key is referenced by name (env_key), not value. The
+  // prompt is NOT here — it is delivered on stdin (see spawnCliWithPrompt), which
+  // `codex exec` reads when no positional prompt is given.
+  buildArgs() {
     const p = this.config.providerName;
     return [
       "exec",
@@ -84,8 +90,7 @@ export class CodexCliAdapter {
       "-c",
       `model_provider="${p}"`,
       "--model",
-      this.config.model,
-      prompt
+      this.config.model
     ];
   }
 
@@ -146,7 +151,10 @@ export class CodexCliAdapter {
   async run(request) {
     const schema = getOutputSchema(request.output_schema); // throws on unknown schema name
     const prompt = buildJsonPrompt(request, schema);
-    const child = this.spawnImpl(this.config.bin, this.buildArgs(prompt), { env: this.buildEnv() });
+    const child = spawnCliWithPrompt(this.spawnImpl, this.config.bin, this.buildArgs(), {
+      env: this.buildEnv(),
+      prompt
+    });
     const consumed = await this.consume(child, request);
 
     if (consumed.timedOut) {

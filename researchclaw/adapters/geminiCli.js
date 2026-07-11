@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { getOutputSchema, validateOutput } from "./schemas.js";
-import { buildJsonPrompt, extractJsonObject, roleForPhase } from "./cliShared.js";
+import { buildJsonPrompt, extractJsonObject, roleForPhase, spawnCliWithPrompt } from "./cliShared.js";
 
 const PROVIDER = "gemini";
 const CLI = "gemini-cli";
@@ -13,8 +13,12 @@ function fail(code, message, retryable = true) {
 }
 
 function defaultWhich(bin) {
+  // `command -v` is a POSIX shell builtin and fails under Windows cmd.exe (the
+  // default execSync shell there), which would mark every real CLI "unavailable"
+  // and silently degrade to mock. Use `where` on win32, `command -v` elsewhere.
+  const probe = process.platform === "win32" ? `where ${bin}` : `command -v ${bin}`;
   try {
-    return execSync(`command -v ${bin}`, { stdio: ["ignore", "pipe", "ignore"] }).toString().trim() || null;
+    return execSync(probe, { stdio: ["ignore", "pipe", "ignore"] }).toString().trim() || null;
   } catch {
     return null;
   }
@@ -63,8 +67,10 @@ export class GeminiCliAdapter {
     return Boolean(which("gemini"));
   }
 
-  buildArgs(prompt) {
-    return ["-p", prompt, "-m", this.config.model, "--skip-trust"];
+  // Prompt is delivered on stdin (see spawnCliWithPrompt), so argv carries only
+  // the model + trust flag. --skip-trust bypasses the trusted-directory gate.
+  buildArgs() {
+    return ["-m", this.config.model, "--skip-trust"];
   }
 
   // Child env: base_url + key only. Never mutates baseEnv, and the key exists
@@ -142,7 +148,10 @@ export class GeminiCliAdapter {
     const schema = getOutputSchema(request.output_schema); // throws on unknown schema name
     this.ensureSettingsFile();
     const prompt = buildJsonPrompt(request, schema);
-    const child = this.spawnImpl(this.config.bin, this.buildArgs(prompt), { env: this.buildEnv() });
+    const child = spawnCliWithPrompt(this.spawnImpl, this.config.bin, this.buildArgs(), {
+      env: this.buildEnv(),
+      prompt
+    });
     const consumed = await this.consume(child, request);
 
     if (consumed.timedOut) {

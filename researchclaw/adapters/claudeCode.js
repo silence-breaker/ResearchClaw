@@ -1,9 +1,15 @@
 import { spawn } from "node:child_process";
 import { execSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync, mkdirSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { ALLOWED_TOOLS, createSandbox } from "../sandbox/index.js";
 import { getOutputSchema, validateOutput } from "./schemas.js";
+
+// Repo-relative dir used to isolate the spawned claude from the user's global
+// cc-switch ~/.claude/settings.json (see buildEnv). Kept inside the repo so the
+// adapter is self-contained and portable across machines; gitignored.
+const ISOLATED_CONFIG_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..", ".researchclaw", "claude-config");
 
 // Role label for the right-column process feed, by phase (技术路线指南 §5.3).
 const ROLE_BY_PHASE = {
@@ -29,8 +35,12 @@ function fail(code, message, retryable = true) {
 }
 
 function defaultWhich(bin) {
+  // `command -v` is a POSIX shell builtin and fails under Windows cmd.exe (the
+  // default execSync shell there), which would mark every real CLI "unavailable"
+  // and silently degrade to mock. Use `where` on win32, `command -v` elsewhere.
+  const probe = process.platform === "win32" ? `where ${bin}` : `command -v ${bin}`;
   try {
-    return execSync(`command -v ${bin}`, { stdio: ["ignore", "pipe", "ignore"] }).toString().trim() || null;
+    return execSync(probe, { stdio: ["ignore", "pipe", "ignore"] }).toString().trim() || null;
   } catch {
     return null;
   }
@@ -56,9 +66,12 @@ export class ClaudeCodeAdapter {
     this.costTracker = costTracker;
     // baseUrl/apiKey (when set) point this adapter at a ResearchClaw-only model
     // provider (e.g. yunwu.ai), applied per-spawn so the global cc-switch config
-    // (~/.claude/settings.json) is never touched. Per-process env wins over
-    // settings.json env (verified empirically).
-    this.config = { model: "claude-haiku-4-5", maxTurns: 20, timeoutMs: 120000, bin: "claude", baseUrl: null, apiKey: null, ...config };
+    // (~/.claude/settings.json) is never touched. NOTE: the claude CLI's
+    // settings.json `env` block OVERRIDES process env — verified 2026-07-11 by a
+    // curl matrix where the RC token + model returned 200 direct, yet the spawned
+    // CLI hit the settings.json token's 403. So we do NOT rely on process env
+    // winning; instead configDir isolates the child (see buildEnv).
+    this.config = { model: "claude-haiku-4-5", maxTurns: 20, timeoutMs: 120000, bin: "claude", baseUrl: null, apiKey: null, configDir: ISOLATED_CONFIG_DIR, ...config };
     this.spawnImpl = spawnImpl;
     this.sandboxFactory = sandboxFactory;
     this.now = now;
@@ -118,7 +131,23 @@ export class ClaudeCodeAdapter {
     if (this.config.apiKey) {
       env.ANTHROPIC_AUTH_TOKEN = this.config.apiKey;
     }
+    // Isolate the spawned claude from the user's cc-switch ~/.claude/settings.json
+    // (which carries a DIFFERENT ANTHROPIC_AUTH_TOKEN + an opus model). That env
+    // block overrides process env for the claude CLI, so without isolation the
+    // child sends the wrong token and 403s (verified: settings.json token + this
+    // model = 403, injected RC token + same model = 200). Pointing CLAUDE_CONFIG_DIR
+    // at a ResearchClaw-only dir makes claude read only the env injected here.
+    if (this.config.configDir) {
+      env.CLAUDE_CONFIG_DIR = this.config.configDir;
+    }
     return env;
+  }
+
+  // Create the isolated config dir before spawning (only in provider mode). Mirrors
+  // GeminiCliAdapter.ensureSettingsFile — a no-op when not isolating.
+  ensureConfigDir() {
+    if (!this.config.baseUrl || !this.config.configDir) return;
+    mkdirSync(this.config.configDir, { recursive: true });
   }
 
   emitChunk(request, data) {
@@ -240,6 +269,7 @@ export class ClaudeCodeAdapter {
     const schema = getOutputSchema(request.output_schema); // throws on unknown schema name
     const sandbox = this.sandboxFactory();
     try {
+      this.ensureConfigDir();
       const prompt = this.buildPrompt(request, schema);
       const child = this.spawnImpl(this.config.bin, this.buildArgs(prompt), {
         cwd: sandbox.dir,
@@ -315,6 +345,7 @@ export class ClaudeCodeAdapter {
   async consult(request) {
     const sandbox = this.sandboxFactory();
     try {
+      this.ensureConfigDir();
       const child = this.spawnImpl(this.config.bin, this.buildConsultArgs(request.message, request.session_id), {
         cwd: sandbox.dir,
         env: this.buildEnv()

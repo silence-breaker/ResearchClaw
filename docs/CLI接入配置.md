@@ -36,7 +36,8 @@
 
 - 环境变量：`ANTHROPIC_BASE_URL=https://yunwu.ai`、`ANTHROPIC_API_KEY=<key>`、模型 `claude-haiku-4-5-20251001`。
 - 双通道：`stream-json`（过程流）+ `out.json`（结构化 artifact），见 `researchclaw/adapters/claudeCode.js`。
-- 状态：**已验证可用**（V2 主链路一直在用）。
+- **env 隔离（必须）**：spawn 的 claude 会读用户 `~/.claude/settings.json` 的 `env` 块，且**它覆盖 process env**。若机器上装了 cc-switch（把另一个 token/opus-model 写进那里），子进程会发错 token 而 403。因此 provider 模式下 adapter 必须注入 `CLAUDE_CONFIG_DIR` 指向隔离目录，令 claude 只认注入的 env。详见 §8.4。
+- 状态：**已验证可用**（V2 主链路 + 2026-07-11 M3 真测三绿）。
 
 ---
 
@@ -167,3 +168,46 @@ spawn `gemini` 时必须：
 2. **key 只走子进程 env**：三套都通过 env 注入 key（`ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GEMINI_API_KEY`），绝不进 argv、raw_log、SSE、artifact。
 3. **base_url 显式钉死**：不能依赖任一 CLI 的默认端点（codex 默认 `/v1/responses` 会 403，gemini 默认打 Google 官方端点）。均从 API.md 读 base_url 显式注入。
 4. **结构化输出差异**：claude 有双通道（stream-json + out.json）；codex/gemini headless 输出需 adapter 抠取/校验 JSON。schema 校验失败一律不得推进 phase。
+
+---
+
+## 8. Node 子进程调用的 Windows 注意事项（2026-07-11 M3 真测补充）
+
+> 背景：§2–§4 的冒烟是在 **PowerShell** 里直接敲 CLI 验证的。M3 adapter 是用 Node `child_process.spawn` 调它们，在 Windows 上多出两层 PowerShell 手测碰不到的坑，M3 真测（`npm run smoke:m3`）逐个暴露并已修复。这些是**接线方法**，可提交。
+
+### 8.1 `isAvailable()` 探测：Windows 用 `where`，不是 `command -v`
+
+- `command -v <bin>` 是 POSIX shell 内建；Windows 上 `execSync` 默认走 `cmd.exe`，`command -v` 报错 → 三套 CLI 全被判「不可用」→ router **静默降级 mock**（真测里表现为每个 provider 在 <10ms 内降级、0 token）。
+- 修法：`process.platform === "win32"` 时用 `where <bin>`，其余平台保留 `command -v`。三套 adapter 的 `defaultWhich` 已统一。
+
+### 8.2 npm 安装的 `gemini`/`codex` 是 `.cmd` shim：spawn 需 `shell:true` + prompt 走 stdin
+
+- `where gemini` 返回 `gemini` 与 `gemini.cmd` 两行；**没有 `.exe`**。Node 新版出于安全默认**拒绝无 `shell:true` 执行 `.cmd`** → `spawn gemini ENOENT`。（`claude` 是真 `.exe`，不受影响，能直接打到网络。）
+- 但一旦 `shell:true`，Node 不转义、cmd 按空格/换行拆 argv：把**大段含空格/换行/引号的 prompt 放进 argv 会被拆坏**（实测：gemini 报「同时使用位置参数和 -p」、codex 报「unexpected argument」）。
+- 修法（`cliShared.js` 的 `spawnCliWithPrompt`，gemini/codex 共用）：
+  1. `shell: process.platform === "win32"`（仅 Windows 需要，跑 `.cmd`）；
+  2. **prompt 改走 stdin**，不进 argv——`gemini`（省略 `-p`）与 `codex exec`（省略位置 prompt）在无位置 prompt 时都从 stdin 读；
+  3. argv 只保留固定安全 flag（gemini：`-m <model> --skip-trust`；codex：`exec --skip-git-repo-check` + 一串 `-c '..="..."'` + `--model <model>`），这些无空格或已是 codex 需要的带引号 TOML 片段，实测在 cmd 拼接下完好存活；
+  4. key 仍只在子进程 env（§7.2 红线不变）。
+- gemini 在 Windows 上输出完整 JSON 后偶发 libuv teardown 断言崩溃（exit code `0xC0000409`），**stdout 已完整**；adapter 的判定是「exit≠0 **且** stdout 为空」才算失败，故不误杀。
+
+### 8.3 真测结论（`npm run smoke:m3`，2026-07-11）
+
+| provider | 结果 | 说明 |
+| --- | --- | --- |
+| gemini | ✅ 真实 CLI、非降级、schema 通过 | `gemini-3.1-flash-lite`，~67s |
+| codex | ✅ 真实 CLI、非降级、schema 通过 | `gpt-5.4-mini`，~21s |
+| claude | ✅ 真实 CLI、非降级、schema 通过 | `claude-haiku-4-5-20251001`，~26s（修 §8.4 的 env 隔离后转绿） |
+
+> M3 代码链路（policy → CliRouter → 真实 adapter → 真实 CLI → schema 校验 → 非降级 artifact）已被三套 CLI 端到端证明打通。
+
+### 8.4 claude 子进程被 `~/.claude/settings.json` 的 env 夺走 token（2026-07-11 定位并修复）
+
+- **现象**：`npm run smoke:m3` 里 claude 报 `403 该令牌无权访问模型 claude-haiku-4-5-20251001`，gemini/codex 用**同一个 key** 却通。
+- **误判纠正**：一度归因为「yunwu 账户侧未给该 claude 模型授权」——**错**。curl 诊断矩阵（token × model 直打 `https://yunwu.ai/v1/messages`）证据：
+  - RC token（`API.md` 的 key）+ `claude-haiku-4-5-20251001` = **200**（正是 adapter 想发的组合）；
+  - cc-switch 的 `~/.claude/settings.json` 里那个**不同的** `ANTHROPIC_AUTH_TOKEN` + 同 model = **403**（与报错逐字吻合）。
+- **真因**：被 spawn 的 `claude` **同时**读注入的 process env 和用户 `~/.claude/settings.json` 的 `env` 块，且**后者覆盖前者**（推翻了「process env wins」的旧注释）。cc-switch 为交互会话写的 token/opus-model 串进了 ResearchClaw 子进程，导致发错 token。
+- **修法（`claudeCode.js`）**：provider 模式（`baseUrl` 存在）下，`buildEnv` 额外注入 `CLAUDE_CONFIG_DIR` 指向**仓库内**隔离目录 `.researchclaw/claude-config`（gitignored，`ensureConfigDir` 首次 `mkdirSync`）。claude 从此只认注入的 `ANTHROPIC_BASE_URL`/`ANTHROPIC_AUTH_TOKEN`，与用户全局 cc-switch 配置**完全隔离**——不读、不改它。
+- **红线不变**：token 仍只在子进程 env；隔离目录不写任何 key。
+- **可移植性**：隔离目录用 `import.meta.url` 算的仓库相对路径，跨机器/跨 OS 一致；`package.json` 的 `smoke:*` 脚本改用 `--enable-claude` CLI flag（不再用 `VAR=1 node` 这种 POSIX-only、在 Windows cmd 下会炸的写法）。

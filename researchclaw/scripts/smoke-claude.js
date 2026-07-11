@@ -31,8 +31,10 @@ async function waitFor(predicate, { tries = 600, intervalMs = 200 } = {}) {
 }
 
 async function main() {
-  if (process.env.RESEARCHCLAW_ENABLE_CLAUDE !== "1") {
-    console.error("Refusing to run: set RESEARCHCLAW_ENABLE_CLAUDE=1 (this spends real Haiku tokens).");
+  // Cost guard. Opt-in via the env var OR the --enable-claude CLI flag (portable
+  // across every OS; `VAR=1 node ...` in npm scripts is POSIX-only, fails on cmd).
+  if (process.env.RESEARCHCLAW_ENABLE_CLAUDE !== "1" && !process.argv.includes("--enable-claude")) {
+    console.error("Refusing to run: pass --enable-claude (or set RESEARCHCLAW_ENABLE_CLAUDE=1). This spends real Haiku tokens.");
     process.exit(2);
   }
 

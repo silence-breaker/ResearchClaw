@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c ' *)",
+      "Bash(node -e \"console.log\\(Buffer.from\\('璇ヤ护鐗屾棤鏉冭闂ā鍨','utf8'\\).toString\\(\\)\\)\")",
+      "Bash(python3 -c \"print\\('璇ヤ护鐗屾棤鏉冭闂ā鍨'.encode\\('gbk'\\).decode\\('utf-8'\\)\\)\")",
+      "Bash(ls -la API.md)",
+      "Bash(grep -i api .gitignore)",
+      "Bash(ls -la docs/)",
+      "Bash(node -e \"import\\('./researchclaw/adapters/providers.js'\\).then\\(m => { const p = m.loadProviders\\(\\); console.log\\('claude:', JSON.stringify\\(p.claude\\)\\); console.log\\('gemini:', JSON.stringify\\(p.gemini\\)\\); console.log\\('codex :', JSON.stringify\\(p.codex\\)\\); }\\)\")",
+      "Read(//c/c/Users/36091/Documents/vscode project/ResearchClaw/researchclaw/**)",
+      "Read(//c/c/Users/36091/Documents/vscode project/ResearchClaw/**)",
+      "Bash(npm test *)",
+      "Bash(node --test researchclaw/tests/store.test.js researchclaw/tests/server.test.js)",
+      "Bash(node --test researchclaw/tests/geminiCli.test.js researchclaw/tests/codexCli.test.js researchclaw/tests/cliRouter.test.js)",
+      "Bash(RESEARCHCLAW_ENABLE_CLAUDE=1 node -e \"import\\('./researchclaw/server.js'\\).then\\(m=>{const {EventBus}=require;const a=m.buildAdapter\\(null\\);console.log\\('router name:', a.adapter.name, '| has run:', typeof a.adapter.run, '| has consult:', typeof a.adapter.consult\\);}\\)\")",
+      "Bash(ls scripts/)",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\(p.scripts,null,2\\)\\)\")",
+      "Bash(command -v claude gemini codex)",
+      "Bash(node --input-type=module -e \"import {getProviderStatus} from './researchclaw/adapters/providers.js'; console.log\\(JSON.stringify\\(getProviderStatus\\(\\),null,2\\)\\)\")",
+      "Bash(RESEARCHCLAW_ENABLE_CLAUDE=1 RESEARCHCLAW_TIMEOUT_MS=180000 node researchclaw/scripts/smoke-m3.js)",
+      "Bash(node --input-type=module -e ' *)"
+    ]
+  }
+}

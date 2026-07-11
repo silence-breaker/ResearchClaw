@@ -21,6 +21,32 @@ export function roleForPhase(phase) {
   return ROLE_BY_PHASE[phase] || "执行";
 }
 
+// Spawn a headless text CLI (gemini/codex) portably and deliver the prompt on
+// STDIN. Two Windows-specific reasons this helper exists:
+//   1. `gemini`/`codex` installed via npm are `.cmd` shims. Node cannot exec a
+//      `.cmd` without a shell (spawn → ENOENT), so we set shell:true on win32.
+//      (The `claude` binary is a real .exe and does not use this helper.)
+//   2. Under a Windows shell, args are concatenated unescaped, so a prompt
+//      containing spaces / newlines / quotes gets split by cmd.exe — verified to
+//      make gemini see a stray positional arg and codex report "unexpected
+//      argument". The prompt therefore never goes in argv; it is piped to stdin
+//      (both CLIs read the prompt from stdin when no positional prompt is given).
+// argv thus carries only fixed, safe flags; the API key stays in env (buildEnv).
+// spawnImpl is injectable so tests drive a stub child (whose stdin, if present,
+// simply receives the prompt).
+export function spawnCliWithPrompt(spawnImpl, bin, args, { env, prompt } = {}) {
+  const child = spawnImpl(bin, args, { env, shell: process.platform === "win32" });
+  if (child.stdin) {
+    try {
+      child.stdin.write(prompt ?? "");
+      child.stdin.end();
+    } catch {
+      /* stdin may already be gone on a fast-failing spawn */
+    }
+  }
+  return child;
+}
+
 // Build a headless prompt that forces a single JSON object on stdout. Mirrors
 // ClaudeCodeAdapter.buildPrompt but targets stdout (gemini/codex are text-only,
 // there is no out.json to write).
