@@ -51,7 +51,7 @@ export class CostTracker {
   _project(projectId) {
     let entry = this.byProject.get(projectId);
     if (!entry) {
-      entry = { ...emptyBucket(), by_phase: {} };
+      entry = { ...emptyBucket(), by_phase: {}, by_provider: {} };
       this.byProject.set(projectId, entry);
     }
     return entry;
@@ -65,6 +65,14 @@ export class CostTracker {
     return entry.by_phase[key];
   }
 
+  _provider(entry, provider) {
+    if (!provider) return null;
+    if (!entry.by_provider[provider]) {
+      entry.by_provider[provider] = emptyBucket();
+    }
+    return entry.by_provider[provider];
+  }
+
   // Accepts the adapter usage shape: input_tokens / output_tokens plus the
   // API's cache_creation_input_tokens / cache_read_input_tokens (the cache reads
   // dominate real spend — M4技术路线-后端 §4).
@@ -73,10 +81,12 @@ export class CostTracker {
     output_tokens = 0,
     cache_creation_input_tokens = 0,
     cache_read_input_tokens = 0,
-    phase
+    phase,
+    provider
   } = {}) {
     const entry = this._project(projectId);
     const apply = (b) => {
+      if (!b) return;
       b.input_tokens += input_tokens;
       b.output_tokens += output_tokens;
       b.cache_creation_tokens += cache_creation_input_tokens;
@@ -85,12 +95,15 @@ export class CostTracker {
     };
     apply(entry);
     apply(this._phase(entry, phase));
+    apply(this._provider(entry, provider));
   }
 
-  recordFailure(projectId, phase) {
+  recordFailure(projectId, phase, provider) {
     const entry = this._project(projectId);
     entry.cli_failures += 1;
     this._phase(entry, phase).cli_failures += 1;
+    const pb = this._provider(entry, provider);
+    if (pb) pb.cli_failures += 1;
   }
 
   snapshot(projectId) {
@@ -105,6 +118,7 @@ export class CostTracker {
         cli_calls: 0,
         cli_failures: 0,
         by_phase: {},
+        by_provider: {},
         budget: this.budgetStatus(projectId)
       };
     }
@@ -117,6 +131,7 @@ export class CostTracker {
       cli_calls: entry.cli_calls,
       cli_failures: entry.cli_failures,
       by_phase: JSON.parse(JSON.stringify(entry.by_phase)),
+      by_provider: JSON.parse(JSON.stringify(entry.by_provider)),
       budget: this.budgetStatus(projectId)
     };
   }
