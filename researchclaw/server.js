@@ -4,9 +4,11 @@ import { dirname, extname, join, normalize, resolve } from "node:path";
 import { URL, fileURLToPath } from "node:url";
 import { MockModelAdapter } from "./adapters/mock.js";
 import { ClaudeCodeAdapter } from "./adapters/claudeCode.js";
+import { GeminiCliAdapter } from "./adapters/geminiCli.js";
+import { CodexCliAdapter } from "./adapters/codexCli.js";
 import { resolveClaudeModel } from "./adapters/claudeConfig.js";
 import { getProviderStatus, loadProviders } from "./adapters/providers.js";
-import { createRoutingAdapter } from "./adapters/route.js";
+import { createCliRouter } from "./adapters/cliRouter.js";
 import { CostTracker } from "./engine/cost.js";
 import { EventBus } from "./engine/events.js";
 import { ResearchOrchestrator } from "./engine/orchestrator.js";
@@ -16,56 +18,98 @@ import { checkCliStatus } from "./settings/cliStatus.js";
 import { resolveCliPolicy, saveCliPolicy } from "./settings/cliPolicy.js";
 import { renderIndexPage, renderPanelPage } from "./ui.js";
 
-// Builds the model adapter wiring from env. Defaults to pure mock (current
-// behaviour, CI-safe, zero model spend). Real Claude Code is opt-in and only
-// for the contract_draft phase in M2; anything else stays on mock. Returns the
-// adapter plus an optional costTracker the orchestrator persists into
-// state.usage. See M2技术路线-后端 §7/§8 and 技术路线指南 §7 (cost is a hard rule).
+// Builds the model adapter wiring from env. Defaults to pure mock (CI-safe,
+// zero model spend — V3-11). When RESEARCHCLAW_ENABLE_CLAUDE=1, assembles the
+// V3 phase-aware CliRouter over all four adapters (claude/gemini/codex/mock):
+// each phase runs on the provider its CLI policy selects, and any real CLI that
+// is unconfigured or absent degrades to mock honestly. API keys stay in the
+// child process env only — never argv/log/SSE/artifact (docs/CLI接入配置.md §7).
+// See 技术路线指南 §5 and V3-M3.
 export function buildAdapter(eventBus) {
   const enabled = process.env.RESEARCHCLAW_ENABLE_CLAUDE === "1";
-  if (!enabled || !ClaudeCodeAdapter.isAvailable()) {
-    if (enabled) {
-      console.warn("[researchclaw] RESEARCHCLAW_ENABLE_CLAUDE=1 but no `claude` binary found — staying on mock.");
-    }
-    return { adapter: new MockModelAdapter(), costTracker: null };
+  const mock = new MockModelAdapter();
+  if (!enabled) {
+    return { adapter: mock, costTracker: null };
   }
-  // ResearchClaw-only model provider from API.md (e.g. yunwu.ai), applied
-  // per-spawn so the global cc-switch config is untouched. Falls back to the
-  // inherited cc-switch endpoint + resolved Haiku id when API.md has no claude.
-  const claudeProvider = loadProviders().claude;
-  const model = claudeProvider?.model || resolveClaudeModel();
-  if (!/haiku/i.test(model)) {
-    console.warn(`[researchclaw] ⚠ non-Haiku model ${model} — Haiku is the cost-safe default; proceed only if intentional.`);
-  }
-  if (!claudeProvider && !process.env.ANTHROPIC_API_KEY) {
-    console.warn("[researchclaw] No API.md provider and no ANTHROPIC_API_KEY — relying on `claude` subscription login; a failed run degrades to mock.");
-  }
+
+  const providers = loadProviders();
+  const timeoutMs = process.env.RESEARCHCLAW_TIMEOUT_MS ? Number(process.env.RESEARCHCLAW_TIMEOUT_MS) : 120000;
   const costTracker = new CostTracker({
     sessionBudgetUsd: process.env.RESEARCHCLAW_SESSION_BUDGET_USD
       ? Number(process.env.RESEARCHCLAW_SESSION_BUDGET_USD)
       : null
   });
-  const primary = new ClaudeCodeAdapter({
+
+  // Claude Code (workflow + consult). Model/base_url from API.md, else the
+  // inherited cc-switch endpoint + resolved Haiku id. Cost is a hard rule.
+  const claudeProvider = providers.claude;
+  const claudeModel = claudeProvider?.model || resolveClaudeModel();
+  if (!/haiku/i.test(claudeModel)) {
+    console.warn(`[researchclaw] ⚠ non-Haiku model ${claudeModel} — Haiku is the cost-safe default; proceed only if intentional.`);
+  }
+  if (!claudeProvider && !process.env.ANTHROPIC_API_KEY) {
+    console.warn("[researchclaw] No API.md provider and no ANTHROPIC_API_KEY — relying on `claude` subscription login; a failed run degrades to mock.");
+  }
+  const claudeAvailable = ClaudeCodeAdapter.isAvailable();
+  const claude = new ClaudeCodeAdapter({
     eventBus,
     costTracker,
     config: {
-      model,
+      model: claudeModel,
       maxTurns: process.env.RESEARCHCLAW_MAX_TURNS ? Number(process.env.RESEARCHCLAW_MAX_TURNS) : 20,
-      timeoutMs: process.env.RESEARCHCLAW_TIMEOUT_MS ? Number(process.env.RESEARCHCLAW_TIMEOUT_MS) : 120000,
-      available: true,
+      timeoutMs,
+      available: claudeAvailable,
       baseUrl: claudeProvider?.baseUrl || null,
       apiKey: claudeProvider?.apiKey || null
     }
   });
-  const adapter = createRoutingAdapter({
-    phases: ["contract_draft"],
-    primary,
-    fallback: new MockModelAdapter(),
+
+  // Gemini / Codex CLIs. Available only when BOTH the API.md provider is
+  // configured AND the binary is on PATH; otherwise the router degrades that
+  // phase to mock (honest). Keys/base_urls injected per-spawn via child env.
+  const geminiConfigured = Boolean(providers.gemini) && GeminiCliAdapter.isAvailable();
+  const gemini = new GeminiCliAdapter({
+    eventBus,
+    costTracker,
+    config: {
+      model: providers.gemini?.model || "gemini-3.1-flash-lite",
+      timeoutMs,
+      available: geminiConfigured,
+      baseUrl: providers.gemini?.baseUrl || null,
+      apiKey: providers.gemini?.apiKey || null
+    }
+  });
+  const codexConfigured = Boolean(providers.codex) && CodexCliAdapter.isAvailable();
+  const codex = new CodexCliAdapter({
+    eventBus,
+    costTracker,
+    config: {
+      model: providers.codex?.model || "gpt-5.4-mini",
+      timeoutMs,
+      available: codexConfigured,
+      baseUrl: providers.codex?.baseUrl || null,
+      apiKey: providers.codex?.apiKey || null
+    }
+  });
+
+  const adapter = createCliRouter({
+    adapters: { claude, gemini, codex, mock },
     costTracker,
     eventBus
   });
-  const endpoint = claudeProvider ? new URL(claudeProvider.baseUrl).host : "cc-switch (inherited)";
-  console.log(`[researchclaw] Claude Code enabled for contract_draft (model=${model}, endpoint=${endpoint}).`);
+
+  const host = (url) => {
+    try {
+      return new URL(url).host;
+    } catch {
+      return "cc-switch (inherited)";
+    }
+  };
+  console.log(
+    `[researchclaw] CliRouter enabled — claude:${claudeAvailable ? host(claudeProvider?.baseUrl) : "off"} ` +
+      `gemini:${geminiConfigured ? host(providers.gemini?.baseUrl) : "off"} ` +
+      `codex:${codexConfigured ? host(providers.codex?.baseUrl) : "off"} (model default=${claudeModel}).`
+  );
   return { adapter, costTracker };
 }
 
