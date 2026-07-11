@@ -52,7 +52,7 @@ export function createArtifact({
 export function producerFields(result) {
   const src = result?.source || {};
   if (result?.degraded) {
-    return { adapter: result.adapter || "mock", cli: "mock", model: null, windowId: src.windowId ?? null };
+    return { adapter: "mock", cli: "mock", model: null, windowId: src.windowId ?? null };
   }
   return {
     adapter: result?.adapter ?? "mock",

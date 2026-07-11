@@ -29,3 +29,8 @@ test("producerFields reports mock honestly for a degraded run, keeping windowId"
   const p = producerFields({ adapter: "mock", degraded: true, source: { provider: "gemini", cli: "gemini-cli", model: "g", windowId: "win_y" } });
   assert.deepEqual(p, { adapter: "mock", cli: "mock", model: null, windowId: "win_y" });
 });
+
+test("producerFields never impersonates a real provider on a degraded run", () => {
+  const p = producerFields({ adapter: "gemini", degraded: true, source: { provider: "gemini", cli: "gemini-cli", model: "g", windowId: "win_y" } });
+  assert.deepEqual(p, { adapter: "mock", cli: "mock", model: null, windowId: "win_y" });
+});
