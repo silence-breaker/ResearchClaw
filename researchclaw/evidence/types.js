@@ -21,6 +21,9 @@ export function createArtifact({
   type,
   workflow,
   adapter = "mock",
+  cli = null,
+  model = null,
+  windowId = null,
   inputRefs = [],
   evidenceRefs = [],
   content,
@@ -35,13 +38,26 @@ export function createArtifact({
     phase,
     type,
     created_at: nowIso(),
-    producer: {
-      workflow,
-      adapter
-    },
+    producer: { workflow, adapter, cli, model, windowId },
     input_refs: inputRefs,
     evidence_refs: evidenceRefs,
     content,
     status
+  };
+}
+
+// 从 router 结果算出诚实的 producer 归属。非降级：cli/model 取自 source（= 实跑）。
+// 降级：实际跑的是 mock，故 cli/model 归 mock（null），但 windowId 仍保留以便追溯
+// 「这个窗口本该是某 provider、降级成了 mock」。
+export function producerFields(result) {
+  const src = result?.source || {};
+  if (result?.degraded) {
+    return { adapter: result.adapter || "mock", cli: "mock", model: null, windowId: src.windowId ?? null };
+  }
+  return {
+    adapter: result?.adapter ?? "mock",
+    cli: src.cli ?? null,
+    model: src.model ?? null,
+    windowId: src.windowId ?? null
   };
 }
