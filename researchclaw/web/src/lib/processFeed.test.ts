@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { adapterBadgeMeta, readRawLogSummary } from "./processFeed";
+import { adapterBadgeMeta, cliLabel, readRawLogSummary } from "./processFeed";
 
 describe("adapterBadgeMeta", () => {
   test("maps known adapters to a label + tone", () => {
@@ -10,7 +10,26 @@ describe("adapterBadgeMeta", () => {
 
   test("falls back gracefully for unknown / missing adapters", () => {
     expect(adapterBadgeMeta(undefined)).toEqual({ label: "—", tone: "unknown" });
-    expect(adapterBadgeMeta("gemini")).toEqual({ label: "gemini", tone: "unknown" });
+  });
+
+  test("maps gemini and codex to their own tone", () => {
+    expect(adapterBadgeMeta("gemini")).toEqual({ label: "Gemini", tone: "gemini" });
+    expect(adapterBadgeMeta("codex")).toEqual({ label: "Codex", tone: "codex" });
+  });
+
+  test("keeps claude/mock/manual", () => {
+    expect(adapterBadgeMeta("claude").tone).toBe("claude");
+    expect(adapterBadgeMeta("mock").tone).toBe("mock");
+    expect(adapterBadgeMeta("manual").tone).toBe("manual");
+  });
+});
+
+describe("cliLabel", () => {
+  test("maps cli ids to human labels", () => {
+    expect(cliLabel("claude-code")).toBe("Claude Code");
+    expect(cliLabel("gemini-cli")).toBe("Gemini CLI");
+    expect(cliLabel("codex-cli")).toBe("Codex CLI");
+    expect(cliLabel(undefined)).toBe("—");
   });
 });
 

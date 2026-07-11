@@ -5,6 +5,8 @@ import { adapterBadgeMeta, type AdapterTone } from "../lib/processFeed";
 // Claude (M2前端 §3.4 / 红线 §4).
 const TONE_CLASS: Record<AdapterTone, string> = {
   claude: "border-accent/40 bg-accent/15 text-accent",
+  gemini: "border-sky-400/40 bg-sky-400/15 text-sky-300",
+  codex: "border-violet-400/40 bg-violet-400/15 text-violet-300",
   mock: "border-panel-border bg-panel-bg text-panel-muted",
   manual: "border-panel-border bg-panel-bg text-panel-muted/70",
   unknown: "border-panel-border bg-panel-bg text-panel-muted/70"

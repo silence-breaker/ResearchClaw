@@ -168,10 +168,40 @@ export class ClaudeCodeAdapter {
     const texts = [];
     for (const block of event.message.content) {
       if (block.type === "text" && block.text) {
-        this.emitChunk(request, consult ? { kind: "consult", role, text: block.text, ts } : { phase: request.phase, role, text: block.text, ts });
+        this.emitChunk(
+          request,
+          consult
+            ? { kind: "consult", role, text: block.text, ts }
+            : {
+                kind: "workflow",
+                phase: request.phase,
+                provider: "claude",
+                cli: "claude-code",
+                model: this.config.model,
+                windowId: request.window_id,
+                role,
+                text: block.text,
+                ts
+              }
+        );
         texts.push(block.text);
       } else if (block.type === "tool_use") {
-        this.emitChunk(request, consult ? { kind: "consult", role, tool: block.name, ts } : { phase: request.phase, role, tool: block.name, ts });
+        this.emitChunk(
+          request,
+          consult
+            ? { kind: "consult", role, tool: block.name, ts }
+            : {
+                kind: "workflow",
+                phase: request.phase,
+                provider: "claude",
+                cli: "claude-code",
+                model: this.config.model,
+                windowId: request.window_id,
+                role,
+                tool: block.name,
+                ts
+              }
+        );
       }
     }
     return texts;

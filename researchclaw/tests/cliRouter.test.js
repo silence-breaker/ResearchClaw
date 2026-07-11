@@ -82,7 +82,9 @@ test("routes contract_draft to the Claude adapter", async () => {
   assert.equal(adapters.claude.calls.length, 1);
   assert.equal(adapters.gemini.calls.length, 0);
   assert.equal(adapters.codex.calls.length, 0);
-  assert.deepEqual(result.source, { provider: "claude", cli: "claude-code", model: "claude-haiku-4-5-20251001", adapter: "claude" });
+  const { windowId: _wid, ...restSource } = result.source;
+  assert.deepEqual(restSource, { provider: "claude", cli: "claude-code", model: "claude-haiku-4-5-20251001", adapter: "claude" });
+  assert.match(_wid, /^win_contract_draft_[0-9a-f]{8}$/);
 });
 
 test("routes literature_scouting to the Gemini adapter", async () => {
@@ -195,6 +197,39 @@ test("consult refuses honestly (no mock) when Claude is unavailable", async () =
   assert.equal(result.ok, false);
   assert.equal(result.error.code, "unavailable");
   assert.equal(adapters.mock.calls.length, 0);
+});
+
+// --- M4: windowId + 降级 chunk 来源 ---
+
+test("run stamps a stable window_id on the request and returns it in source", async () => {
+  const adapters = baseAdapters();
+  const result = await makeRouter({ adapters }).run(req("contract_draft"));
+  const passed = adapters.claude.calls[0];
+  assert.match(passed.window_id, /^win_contract_draft_[0-9a-f]{8}$/);
+  assert.equal(result.source.windowId, passed.window_id);
+});
+
+test("degraded cli_chunk carries provider/cli/model/windowId, not just a banner", async () => {
+  const adapters = baseAdapters();
+  adapters.gemini.available = false;
+  const eventBus = new EventBus();
+  const events = [];
+  eventBus.subscribe("proj_a", (e) => events.push(e));
+  const result = await makeRouter({ adapters, eventBus }).run(req("literature_scouting"));
+  const chunk = events.find((e) => e.type === "cli_chunk")?.data;
+  assert.equal(chunk.degraded, true);
+  assert.equal(chunk.kind, "workflow");
+  assert.equal(chunk.provider, "gemini");
+  assert.equal(chunk.cli, "gemini-cli");
+  assert.equal(chunk.windowId, result.source.windowId);
+});
+
+test("successful run records usage under the provider bucket", async () => {
+  const adapters = baseAdapters();
+  const costTracker = new CostTracker();
+  await makeRouter({ adapters, costTracker }).run(req("contract_draft"));
+  const snap = costTracker.snapshot("proj_a");
+  assert.equal(snap.by_provider.claude.cli_calls, 1);
 });
 
 test("createCliRouter requires a mock adapter", () => {

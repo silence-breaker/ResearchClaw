@@ -1,4 +1,4 @@
-import { createArtifact } from "../evidence/types.js";
+import { createArtifact, producerFields } from "../evidence/types.js";
 
 export async function runLiteratureWorkflow({ adapter, projectId, contract, inputRefs = [], evidenceRefs = [] }) {
   const result = await adapter.run({
@@ -18,12 +18,16 @@ export async function runLiteratureWorkflow({ adapter, projectId, contract, inpu
   if (!result.ok) {
     throw new Error(result.error?.message || "literature scouting failed");
   }
+  const p = producerFields(result);
   return createArtifact({
     projectId,
     phase: "literature_scouting",
     type: "paper_cards",
     workflow: "literature",
-    adapter: result.adapter,
+    adapter: p.adapter,
+    cli: p.cli,
+    model: p.model,
+    windowId: p.windowId,
     inputRefs,
     evidenceRefs,
     content: result.output

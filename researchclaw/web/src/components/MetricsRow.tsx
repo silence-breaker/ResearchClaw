@@ -5,6 +5,7 @@ import type { ProjectState } from "../api/types";
 import { evidenceCoverage } from "../lib/evidence";
 import { budgetTone, costTooltip, elapsedLabel } from "../lib/metrics";
 import { artifactCount, gatePassRate, overallProgress } from "../lib/pipeline";
+import { adapterBadgeMeta } from "../lib/processFeed";
 
 const toneClass: Record<"ok" | "warn" | "over", string> = {
   ok: "border-panel-border bg-panel-surface",
@@ -86,6 +87,18 @@ export function MetricsRow({ state }: { state: ProjectState }) {
         />
         <PhaseTimer state={state} />
       </div>
+      {usage?.by_provider && Object.keys(usage.by_provider).length > 0 && (
+        <div className="flex flex-wrap gap-2 text-[11px] text-panel-muted">
+          <span className="text-panel-muted/70">按 CLI：</span>
+          {Object.entries(usage.by_provider).map(([provider, b]) => (
+            <span key={provider} className="rounded border border-panel-border bg-panel-bg px-2 py-0.5">
+              {adapterBadgeMeta(provider).label} · {b.cli_calls} 调用
+              {b.cli_failures ? ` / ${b.cli_failures} 失败` : ""}
+              {b.est_cost_usd != null ? ` · $${b.est_cost_usd.toFixed(4)}` : ""}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

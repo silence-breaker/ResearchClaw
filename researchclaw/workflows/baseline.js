@@ -1,4 +1,4 @@
-import { createArtifact } from "../evidence/types.js";
+import { createArtifact, producerFields } from "../evidence/types.js";
 
 export async function runBaselineWorkflow({
   adapter,
@@ -30,12 +30,16 @@ export async function runBaselineWorkflow({
   if (!result.ok) {
     throw new Error(result.error?.message || "baseline selection failed");
   }
+  const p = producerFields(result);
   return createArtifact({
     projectId,
     phase: "baseline_selection",
     type: "baseline_decision",
     workflow: "baseline",
-    adapter: result.adapter,
+    adapter: p.adapter,
+    cli: p.cli,
+    model: p.model,
+    windowId: p.windowId,
     inputRefs,
     evidenceRefs,
     content: result.output
@@ -72,12 +76,16 @@ export async function runReproductionChecklistWorkflow({
   if (!result.ok) {
     throw new Error(result.error?.message || "reproduction checklist failed");
   }
+  const p = producerFields(result);
   return createArtifact({
     projectId,
     phase: "baseline_reproduction_checklist",
     type: "reproduction_checklist",
     workflow: "baselineReproductionChecklist",
-    adapter: result.adapter,
+    adapter: p.adapter,
+    cli: p.cli,
+    model: p.model,
+    windowId: p.windowId,
     inputRefs,
     evidenceRefs,
     content: result.output

@@ -1,4 +1,4 @@
-import { createArtifact } from "../evidence/types.js";
+import { createArtifact, producerFields } from "../evidence/types.js";
 
 export async function runContractDraftWorkflow({
   adapter,
@@ -35,12 +35,16 @@ export async function runContractDraftWorkflow({
   if (!result.ok) {
     throw new Error(result.error?.message || "contract draft failed");
   }
+  const p = producerFields(result);
   const contract = createArtifact({
     projectId,
     phase: "contract_draft",
     type: "contract",
     workflow: "contractDraft",
-    adapter: result.adapter,
+    adapter: p.adapter,
+    cli: p.cli,
+    model: p.model,
+    windowId: p.windowId,
     inputRefs,
     evidenceRefs,
     content: result.output,
@@ -48,5 +52,5 @@ export async function runContractDraftWorkflow({
   });
   // `raw` carries the CLI transcript + summary (present only for real Claude
   // runs); the orchestrator lands it as a raw_log artifact (两通道 §2.1).
-  return { contract, raw: result.raw };
+  return { contract, raw: result.raw, producer: p };
 }

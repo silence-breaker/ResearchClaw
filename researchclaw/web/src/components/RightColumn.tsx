@@ -3,8 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchArtifact } from "../api/client";
 import type { CliChunk, ProjectCurrent, ProjectState } from "../api/types";
 import type { LiveConsult } from "../lib/consult";
-import { isDegradedChunk } from "../lib/cliStream";
-import { readRawLogSummary } from "../lib/processFeed";
+import { groupCliWindows, isDegradedChunk } from "../lib/cliStream";
+import { cliLabel, readRawLogSummary } from "../lib/processFeed";
 import { AdapterBadge } from "./AdapterBadge";
 import { ConsultPanel } from "./ConsultPanel";
 import { RefChip } from "./RefChip";
@@ -55,26 +55,41 @@ function ProcessFeedItem({ projectId, refValue }: { projectId: string; refValue:
   );
 }
 
-// Live cli_chunk region: the CLI's running actions, faint + collapsible. Clearly
-// marked as process transparency — never a conclusion (两通道红线 §2.1).
-function LiveChunks({ chunks }: { chunks: CliChunk[] }) {
-  if (chunks.length === 0) {
+// 按 windowId 分组的 CLI 执行窗口：每次 run 一组，组头标 phase · CLI · model +
+// [真实]/[降级 mock]。过程透明度，非结论（两通道红线 §2.1）。
+function CliWindows({ chunks }: { chunks: CliChunk[] }) {
+  const windows = groupCliWindows(chunks);
+  if (windows.length === 0) {
     return null;
   }
-  const recent = chunks.slice(-12);
   return (
-    <details className="rounded border border-panel-border bg-panel-bg/60" open>
-      <summary className="cursor-pointer px-2 py-1 text-[10px] uppercase tracking-wide text-panel-muted">
-        实时过程（{chunks.length}）· 过程透明度，非结论
-      </summary>
-      <ul className="max-h-40 space-y-0.5 overflow-auto px-2 pb-2">
-        {recent.map((c, i) => (
-          <li key={`${c.ts}-${i}`} className="font-mono text-[10px] text-panel-muted/80">
-            {c.tool ? `🛠 ${c.tool}` : c.text?.slice(0, 80)}
-          </li>
-        ))}
-      </ul>
-    </details>
+    <div className="space-y-2">
+      <div className="text-[10px] uppercase tracking-wide text-panel-muted">CLI 执行窗口 · 过程透明度，非结论</div>
+      {windows.map((w) => {
+        const recent = w.chunks.slice(-12);
+        return (
+          <details key={w.windowId} className="rounded border border-panel-border bg-panel-bg/60" open>
+            <summary className="cursor-pointer px-2 py-1 text-[10px] text-panel-muted">
+              <span className="text-panel-text">{w.phase ?? "—"}</span>
+              {" · "}
+              {cliLabel(w.cli)}
+              {w.model ? ` · ${w.model}` : ""}
+              {"  "}
+              <span className={w.degraded ? "text-amber-300" : "text-emerald-300"}>
+                {w.degraded ? "[降级 mock]" : "[真实]"}
+              </span>
+            </summary>
+            <ul className="max-h-40 space-y-0.5 overflow-auto px-2 pb-2">
+              {recent.map((c, i) => (
+                <li key={`${c.ts}-${i}`} className="font-mono text-[10px] text-panel-muted/80">
+                  {c.tool ? `🛠 ${c.tool}` : c.text?.slice(0, 80)}
+                </li>
+              ))}
+            </ul>
+          </details>
+        );
+      })}
+    </div>
   );
 }
 
@@ -160,7 +175,7 @@ export function RightColumn({
         <ConsultPanel projectId={projectId} state={state} liveConsult={liveConsult} onSend={onSendConsult} />
       )}
 
-      <LiveChunks chunks={cliChunks} />
+      <CliWindows chunks={cliChunks} />
 
       <div>
         <div className="text-xs uppercase tracking-wide text-panel-muted">关键产物（artifact）</div>

@@ -5,6 +5,25 @@ import { createArtifact } from "../evidence/types.js";
 import { runContractDraftWorkflow } from "../workflows/contractDraft.js";
 import { runLiteratureWorkflow } from "../workflows/literature.js";
 
+test("gemini-routed literature artifact records gemini as producer, not claude", async () => {
+  const adapter = {
+    async run() {
+      return {
+        ok: true, adapter: "gemini", degraded: false,
+        source: { provider: "gemini", cli: "gemini-cli", model: "gemini-3.1-flash-lite", adapter: "gemini", windowId: "win_y" },
+        output: [
+          { id: "p1", title: "t", why_relevant: "r" },
+          { id: "p2", title: "t2", why_relevant: "r2" },
+          { id: "p3", title: "t3", why_relevant: "r3" }
+        ]
+      };
+    }
+  };
+  const art = await runLiteratureWorkflow({ adapter, projectId: "p", contract: {}, inputRefs: [], evidenceRefs: [] });
+  assert.equal(art.producer.adapter, "gemini");
+  assert.equal(art.producer.cli, "gemini-cli");
+});
+
 test("mock adapter returns deterministic structured output", async () => {
   const adapter = new MockModelAdapter();
   const result = await adapter.run({

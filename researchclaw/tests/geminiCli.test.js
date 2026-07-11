@@ -119,6 +119,18 @@ test("emits cli_chunk events tagged with provider/cli so the panel can group the
   assert.equal(chunk.data.cli, "gemini-cli");
 });
 
+test("gemini cli_chunk carries kind:workflow and windowId", async () => {
+  const emitted = [];
+  const eventBus = { emit: (_pid, e) => emitted.push(e) };
+  const adapter = new GeminiCliAdapter({ eventBus, config: { model: "gemini-3.1-flash-lite" } });
+  const child = { stdout: { on: (_e, cb) => cb(Buffer.from("hello")) }, stderr: { on() {} }, on() {} };
+  void adapter.consume(child, { project_id: "p", phase: "literature_scouting", window_id: "win_y" });
+  const data = emitted[0].data;
+  assert.equal(data.kind, "workflow");
+  assert.equal(data.windowId, "win_y");
+  assert.equal(data.provider, "gemini");
+});
+
 test("ensureSettingsFile writes a BOM-free settings.json only when missing", async () => {
   const dir = mkdtempSync(join(tmpdir(), "gem-settings-"));
   try {
