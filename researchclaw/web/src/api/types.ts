@@ -94,6 +94,7 @@ export interface UsageSummary {
   cli_calls: number;
   cli_failures: number;
   by_phase?: Record<string, { input_tokens: number; output_tokens: number; cli_calls: number; cli_failures: number }>;
+  by_provider?: Record<string, { input_tokens: number; output_tokens: number; cli_calls: number; cli_failures: number }>;
   budget?: BudgetStatus;
 }
 
@@ -119,13 +120,17 @@ export interface ProjectState {
 // `kind:"consult"` routes the chunk to the consult chat view instead of the
 // workflow process feed (workflow chunks carry no kind). See M3技术路线-前端 §3.1.
 export interface CliChunk {
+  kind?: "consult" | "workflow";
   phase?: string;
+  provider?: CliProvider;
+  cli?: CliId;
+  model?: string;
+  windowId?: string;
   role: string;
   text?: string;
   tool?: string;
   ts: string;
   degraded?: boolean;
-  kind?: "consult" | "workflow";
 }
 
 // SSE `consult_message`: one consult turn settled (ok) or failed. The panel uses
@@ -161,6 +166,9 @@ export interface CliRawLogSummary {
   question?: string;
   answer_text?: string;
   session_id?: string;
+  provider?: string;
+  cli?: string;
+  window_id?: string;
 }
 
 export interface ProjectSummary {
@@ -226,7 +234,7 @@ export interface Artifact<T = unknown> {
   phase: ResearchPhase;
   type: ArtifactType;
   created_at: string;
-  producer: { workflow: string; adapter: "mock" | "claude" | "gemini" | "codex" | "manual" };
+  producer: { workflow: string; adapter: "mock" | "claude" | "gemini" | "codex" | "manual"; cli?: string; model?: string; windowId?: string };
   input_refs: string[];
   evidence_refs: string[];
   content: T;
