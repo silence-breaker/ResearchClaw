@@ -1,6 +1,6 @@
 import { approveContract } from "../contract/contract.js";
 import { MockModelAdapter } from "../adapters/mock.js";
-import { createArtifact, producerFields } from "../evidence/types.js";
+import { createArtifact } from "../evidence/types.js";
 import { makeId, nowIso, publicStateSummary, redactSecrets } from "../util.js";
 import { runBaselineWorkflow, runReproductionChecklistWorkflow } from "../workflows/baseline.js";
 import { runContractDraftWorkflow } from "../workflows/contractDraft.js";
