@@ -126,11 +126,13 @@ export class CodexCliAdapter {
         const text = data.toString();
         stdout += text;
         this.emitChunk(request, {
+          kind: "workflow",
           phase: request.phase,
           role: roleForPhase(request.phase),
           provider: PROVIDER,
           cli: CLI,
           model: this.config.model,
+          windowId: request.window_id,
           text,
           ts: this.now()
         });

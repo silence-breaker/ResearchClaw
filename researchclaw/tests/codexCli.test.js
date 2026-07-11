@@ -93,6 +93,18 @@ test("run times out on a hanging process", async () => {
   assert.equal(result.error.code, "timeout");
 });
 
+test("codex cli_chunk carries kind:workflow and windowId", async () => {
+  const emitted = [];
+  const eventBus = { emit: (_pid, e) => emitted.push(e) };
+  const adapter = new CodexCliAdapter({ eventBus, config: { model: "gpt-5.4-mini" } });
+  const child = { stdout: { on: (_e, cb) => cb(Buffer.from("hello")) }, stderr: { on() {} }, on() {} };
+  void adapter.consume(child, { project_id: "p", phase: "baseline_reproduction_checklist", window_id: "win_z" });
+  const data = emitted[0].data;
+  assert.equal(data.kind, "workflow");
+  assert.equal(data.windowId, "win_z");
+  assert.equal(data.provider, "codex");
+});
+
 test("emits cli_chunk events tagged with provider/cli", async () => {
   const eventBus = new EventBus();
   const events = [];
