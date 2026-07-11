@@ -20,20 +20,30 @@ export function createCliRouter({
     throw new Error("createCliRouter requires a mock adapter (fallback base)");
   }
 
-  function sourceOf(policy, adapterName) {
+  function makeWindowId(phase) {
+    return `win_${phase || "phase"}_${Math.random().toString(16).slice(2, 10).padEnd(8, "0")}`;
+  }
+
+  function sourceOf(policy, adapterName, windowId) {
     return {
       provider: policy?.provider ?? null,
       cli: policy?.cli ?? null,
       model: policy?.model ?? null,
-      adapter: adapterName
+      adapter: adapterName,
+      windowId
     };
   }
 
-  function emitDegraded(request, reason) {
+  function emitDegraded(request, policy, windowId, reason) {
     eventBus?.emit(request.project_id, {
       type: "cli_chunk",
       data: {
+        kind: "workflow",
         phase: request.phase,
+        provider: policy?.provider ?? null,
+        cli: policy?.cli ?? null,
+        model: policy?.model ?? null,
+        windowId,
         role: "系统",
         degraded: true,
         text: `${reason}，已降级 mock`,
@@ -42,10 +52,10 @@ export function createCliRouter({
     });
   }
 
-  async function degrade(request, policy, reason) {
-    emitDegraded(request, reason);
+  async function degrade(request, policy, windowId, reason) {
+    emitDegraded(request, policy, windowId, reason);
     const result = await mock.run(request);
-    return { ...result, degraded: true, source: sourceOf(policy, "mock") };
+    return { ...result, degraded: true, source: sourceOf(policy, "mock", windowId) };
   }
 
   return {
@@ -54,37 +64,39 @@ export function createCliRouter({
     async run(request) {
       const policy = resolvePolicy(request.phase) || { provider: fallbackProvider, cli: "mock", model: null };
       const provider = policy.provider;
+      const windowId = makeWindowId(request.phase);
+      const runReq = { ...request, window_id: windowId };
 
       // mock is explicitly configured for this phase → run it as the real choice
       // (not a degradation). Source still records the configured policy.
       if (provider === "mock") {
-        const result = await mock.run(request);
-        return { ...result, source: sourceOf(policy, "mock") };
+        const result = await mock.run(runReq);
+        return { ...result, source: sourceOf(policy, "mock", windowId) };
       }
 
       const adapter = adapters[provider];
       if (!adapter || adapter.available === false || typeof adapter.run !== "function") {
-        return degrade(request, policy, `${provider} CLI 不可用`);
+        return degrade(runReq, policy, windowId, `${provider} CLI 不可用`);
       }
       if (costTracker?.overBudget(request.project_id)) {
-        return degrade(request, policy, "超出会话预算");
+        return degrade(runReq, policy, windowId, "超出会话预算");
       }
 
       let result;
       try {
-        result = await adapter.run({ ...request, model: policy.model });
+        result = await adapter.run({ ...runReq, model: policy.model });
       } catch (err) {
-        costTracker?.recordFailure(request.project_id, request.phase);
-        return degrade(request, policy, `${provider} 运行异常（${err?.message || err}）`);
+        costTracker?.recordFailure(request.project_id, request.phase, provider);
+        return degrade(runReq, policy, windowId, `${provider} 运行异常（${err?.message || err}）`);
       }
       if (!result.ok) {
-        costTracker?.recordFailure(request.project_id, request.phase);
-        return degrade(request, policy, result.error?.code || `${provider} 运行失败`);
+        costTracker?.recordFailure(request.project_id, request.phase, provider);
+        return degrade(runReq, policy, windowId, result.error?.code || `${provider} 运行失败`);
       }
       if (result.usage) {
-        costTracker?.record(request.project_id, { ...result.usage, phase: request.phase });
+        costTracker?.record(request.project_id, { ...result.usage, phase: request.phase, provider });
       }
-      return { ...result, source: sourceOf(policy, provider) };
+      return { ...result, source: sourceOf(policy, provider, windowId) };
     },
 
     // consult stays Claude-only (V3-M4: ConsultPanel keeps Claude semantics;
