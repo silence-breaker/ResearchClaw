@@ -62,6 +62,9 @@ export function ArtifactDetailDrawer({ projectId }: { projectId: string }) {
                 <Meta label="type" value={artifact.type} />
                 <Meta label="phase" value={artifact.phase} />
                 <Meta label="adapter" value={<AdapterBadge adapter={artifact.producer?.adapter} />} />
+                {artifact.producer?.cli && <Meta label="cli" value={artifact.producer.cli} />}
+                {artifact.producer?.model && <Meta label="model" value={artifact.producer.model} />}
+                {artifact.producer?.windowId && <Meta label="windowId" value={artifact.producer.windowId} />}
                 <Meta label="workflow" value={artifact.producer?.workflow ?? "—"} />
                 <Meta label="status" value={artifact.status} />
                 <Meta label="created_at" value={artifact.created_at} />

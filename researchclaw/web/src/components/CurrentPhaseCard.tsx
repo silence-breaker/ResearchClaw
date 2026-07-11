@@ -44,8 +44,12 @@ export function CurrentPhaseCard({ state }: { state: ProjectState }) {
           <div className="mt-1 text-xs text-panel-muted">开始时间：{formatTime(state.current.phase_started_at)}</div>
         </div>
         {artifact.data?.producer.adapter && (
-          <span className="rounded-full border border-panel-border bg-panel-bg px-2 py-0.5 text-xs text-panel-muted">
+          <span
+            className="rounded-full border border-panel-border bg-panel-bg px-2 py-0.5 text-xs text-panel-muted"
+            title={artifact.data.producer.windowId ? `windowId: ${artifact.data.producer.windowId}` : undefined}
+          >
             {artifact.data.producer.adapter}
+            {artifact.data.producer.model ? ` · ${artifact.data.producer.model}` : ""}
           </span>
         )}
       </div>
