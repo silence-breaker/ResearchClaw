@@ -1,7 +1,8 @@
 # ResearchClaw V3-M4 多 CLI 窗口与 SSE 展示
 
 > 阶段：V3-M4
-> 状态：**未完成（2026-07-09 代码核查）**
+> 状态：**已完成（2026-07-11 实现，按 windowId 分组 + by_provider）**
+> 实现设计（实现级订正，以真实代码为准）：`docs/superpowers/specs/2026-07-11-m4-multi-cli-window-design.md`
 > 目标：让前端能区分 Claude Code、Gemini CLI、Codex CLI 的执行窗口、过程流、artifact 来源与成本来源
 > 前置：V3-M3 CliRouter 与三套 CLI Adapter 完成
 
