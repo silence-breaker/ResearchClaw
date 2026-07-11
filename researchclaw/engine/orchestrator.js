@@ -1,6 +1,6 @@
 import { approveContract } from "../contract/contract.js";
 import { MockModelAdapter } from "../adapters/mock.js";
-import { createArtifact } from "../evidence/types.js";
+import { createArtifact, producerFields } from "../evidence/types.js";
 import { makeId, nowIso, publicStateSummary, redactSecrets } from "../util.js";
 import { runBaselineWorkflow, runReproductionChecklistWorkflow } from "../workflows/baseline.js";
 import { runContractDraftWorkflow } from "../workflows/contractDraft.js";
@@ -94,7 +94,7 @@ export class ResearchOrchestrator {
   // its ref on state. The full transcript is redacted + saved as a raw payload;
   // the artifact content is the structured summary + a transcript_ref. This is
   // process transparency only — never a conclusion (两通道红线 §2.1).
-  landCliRawLog(state, raw, phase, sourceRef) {
+  landCliRawLog(state, raw, phase, sourceRef, producer = { adapter: "mock", cli: null, model: null, windowId: null }) {
     if (!raw) {
       return;
     }
@@ -106,10 +106,20 @@ export class ResearchOrchestrator {
       phase,
       type: "raw_log",
       workflow: "cli_transcript",
-      adapter: "claude",
+      adapter: producer.adapter,
+      cli: producer.cli,
+      model: producer.model,
+      windowId: producer.windowId,
       inputRefs: [sourceRef].filter(Boolean),
       evidenceRefs: [],
-      content: redactSecrets({ ...raw.summary, transcript_ref: transcriptRef })
+      content: redactSecrets({
+        ...raw.summary,
+        provider: producer.adapter,
+        cli: producer.cli,
+        model: producer.model,
+        window_id: producer.windowId,
+        transcript_ref: transcriptRef
+      })
     });
     const ref = this.store.appendArtifact(artifact);
     state.current.raw_log_artifact_refs = [...(state.current.raw_log_artifact_refs || []), ref];
@@ -248,12 +258,12 @@ export class ResearchOrchestrator {
   // Commits a draft/revise workflow result: appends the contract + CLI raw_log,
   // runs the gate, and transitions to contract_review (pass) or blocked (fail).
   // Returns true on pass. Mutates state; the caller writes.
-  _commitDraft(state, { contract: draftArtifact, raw }) {
+  _commitDraft(state, { contract: draftArtifact, raw, producer }) {
     const gate = contractGate(draftArtifact.content);
     const draftRef = this.store.appendArtifact(draftArtifact);
     state.current.contract_artifact_ref = draftRef;
     state.current.contract_artifact_id = draftArtifact.artifact_id;
-    this.landCliRawLog(state, raw, "contract_draft", draftRef);
+    this.landCliRawLog(state, raw, "contract_draft", draftRef, producer);
     state.contract_versions.push({
       version: draftArtifact.content.version,
       artifact_ref: draftRef,

@@ -1,4 +1,4 @@
-import { createArtifact } from "../evidence/types.js";
+import { createArtifact, producerFields } from "../evidence/types.js";
 
 export async function runSummaryWorkflow({
   adapter,
@@ -36,12 +36,16 @@ export async function runSummaryWorkflow({
   if (!result.ok) {
     throw new Error(result.error?.message || "summary failed");
   }
+  const p = producerFields(result);
   return createArtifact({
     projectId,
     phase: "summary",
     type: "summary",
     workflow: "summary",
-    adapter: result.adapter,
+    adapter: p.adapter,
+    cli: p.cli,
+    model: p.model,
+    windowId: p.windowId,
     inputRefs,
     evidenceRefs,
     content: result.output

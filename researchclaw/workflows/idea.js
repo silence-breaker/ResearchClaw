@@ -1,4 +1,4 @@
-import { createArtifact } from "../evidence/types.js";
+import { createArtifact, producerFields } from "../evidence/types.js";
 
 export async function runIdeaWorkflow({
   adapter,
@@ -42,12 +42,16 @@ export async function runIdeaWorkflow({
   if (!result.ok) {
     throw new Error(result.error?.message || "idea generation failed");
   }
+  const p = producerFields(result);
   return createArtifact({
     projectId,
     phase: "idea_generation",
     type: "idea_cards",
     workflow: "idea",
-    adapter: result.adapter,
+    adapter: p.adapter,
+    cli: p.cli,
+    model: p.model,
+    windowId: p.windowId,
     inputRefs,
     evidenceRefs,
     content: result.output
