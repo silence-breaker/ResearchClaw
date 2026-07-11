@@ -184,3 +184,32 @@ test("run captures cache tokens from the result usage (M4)", async () => {
   assert.equal(result.usage.cache_creation_input_tokens, 40885);
   assert.equal(result.usage.cache_read_input_tokens, 36748);
 });
+
+test("workflow cli_chunk carries kind/provider/cli/model/windowId", async () => {
+  const emitted = [];
+  const eventBus = { emit: (_pid, e) => emitted.push(e) };
+  const adapter = new ClaudeCodeAdapter({ eventBus, config: { model: "claude-haiku-4-5" } });
+  const event = {
+    type: "assistant",
+    message: { content: [{ type: "text", text: "drafting" }] }
+  };
+  adapter.handleEventChunks(event, { project_id: "p", phase: "contract_draft", window_id: "win_x" }, "workflow");
+  const data = emitted[0].data;
+  assert.equal(data.kind, "workflow");
+  assert.equal(data.provider, "claude");
+  assert.equal(data.cli, "claude-code");
+  assert.equal(data.model, "claude-haiku-4-5");
+  assert.equal(data.windowId, "win_x");
+  assert.equal(data.text, "drafting");
+});
+
+test("consult cli_chunk stays kind:consult with no windowId", async () => {
+  const emitted = [];
+  const eventBus = { emit: (_pid, e) => emitted.push(e) };
+  const adapter = new ClaudeCodeAdapter({ eventBus, config: { model: "claude-haiku-4-5" } });
+  const event = { type: "assistant", message: { content: [{ type: "text", text: "hi" }] } };
+  adapter.handleEventChunks(event, { project_id: "p", phase: "contract_draft", window_id: "win_x" }, "consult");
+  const data = emitted[0].data;
+  assert.equal(data.kind, "consult");
+  assert.equal(data.windowId, undefined);
+});
