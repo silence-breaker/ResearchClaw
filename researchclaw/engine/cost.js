@@ -106,6 +106,17 @@ export class CostTracker {
     if (pb) pb.cli_failures += 1;
   }
 
+  // Clone a {key: bucket} map and attach est_cost_usd to each bucket, so the
+  // panel can show per-phase / per-provider spend without re-pricing on the
+  // frontend (red line: pricing lives in one place — 技术路线指南 §7).
+  _bucketsWithCost(map) {
+    const out = {};
+    for (const [key, bucket] of Object.entries(map)) {
+      out[key] = { ...bucket, est_cost_usd: estimateCostUsd(bucket, this.pricing) };
+    }
+    return out;
+  }
+
   snapshot(projectId) {
     const entry = this.byProject.get(projectId);
     if (!entry) {
@@ -130,8 +141,8 @@ export class CostTracker {
       est_cost_usd: estimateCostUsd(entry, this.pricing),
       cli_calls: entry.cli_calls,
       cli_failures: entry.cli_failures,
-      by_phase: JSON.parse(JSON.stringify(entry.by_phase)),
-      by_provider: JSON.parse(JSON.stringify(entry.by_provider)),
+      by_phase: this._bucketsWithCost(entry.by_phase),
+      by_provider: this._bucketsWithCost(entry.by_provider),
       budget: this.budgetStatus(projectId)
     };
   }

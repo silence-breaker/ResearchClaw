@@ -166,3 +166,20 @@ test("unknown project snapshot has an empty by_provider", () => {
   const tracker = new CostTracker();
   assert.deepEqual(tracker.snapshot("nope").by_provider, {});
 });
+
+test("snapshot attaches est_cost_usd to each by_provider bucket", () => {
+  const tracker = new CostTracker();
+  tracker.record("proj_pc", { input_tokens: 300, output_tokens: 130, phase: "contract_draft", provider: "claude" });
+  const snap = tracker.snapshot("proj_pc");
+  const expected = estimateCostUsd({ input_tokens: 300, output_tokens: 130 }, HAIKU_PRICING);
+  assert.equal(snap.by_provider.claude.est_cost_usd, expected);
+  assert.ok(snap.by_provider.claude.est_cost_usd > 0);
+});
+
+test("snapshot attaches est_cost_usd to each by_phase bucket", () => {
+  const tracker = new CostTracker();
+  tracker.record("proj_pf", { input_tokens: 300, output_tokens: 130, phase: "contract_draft" });
+  const snap = tracker.snapshot("proj_pf");
+  const expected = estimateCostUsd({ input_tokens: 300, output_tokens: 130 }, HAIKU_PRICING);
+  assert.equal(snap.by_phase.contract_draft.est_cost_usd, expected);
+});

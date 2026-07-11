@@ -93,8 +93,8 @@ export interface UsageSummary {
   est_cost_usd: number;
   cli_calls: number;
   cli_failures: number;
-  by_phase?: Record<string, { input_tokens: number; output_tokens: number; cli_calls: number; cli_failures: number }>;
-  by_provider?: Record<string, { input_tokens: number; output_tokens: number; cli_calls: number; cli_failures: number }>;
+  by_phase?: Record<string, { input_tokens: number; output_tokens: number; cli_calls: number; cli_failures: number; est_cost_usd?: number }>;
+  by_provider?: Record<string, { input_tokens: number; output_tokens: number; cli_calls: number; cli_failures: number; est_cost_usd?: number }>;
   budget?: BudgetStatus;
 }
 

@@ -5,6 +5,7 @@ import type { ProjectState } from "../api/types";
 import { evidenceCoverage } from "../lib/evidence";
 import { budgetTone, costTooltip, elapsedLabel } from "../lib/metrics";
 import { artifactCount, gatePassRate, overallProgress } from "../lib/pipeline";
+import { adapterBadgeMeta } from "../lib/processFeed";
 
 const toneClass: Record<"ok" | "warn" | "over", string> = {
   ok: "border-panel-border bg-panel-surface",
@@ -91,7 +92,9 @@ export function MetricsRow({ state }: { state: ProjectState }) {
           <span className="text-panel-muted/70">按 CLI：</span>
           {Object.entries(usage.by_provider).map(([provider, b]) => (
             <span key={provider} className="rounded border border-panel-border bg-panel-bg px-2 py-0.5">
-              {provider} · {b.cli_calls} 调用{b.cli_failures ? ` / ${b.cli_failures} 失败` : ""}
+              {adapterBadgeMeta(provider).label} · {b.cli_calls} 调用
+              {b.cli_failures ? ` / ${b.cli_failures} 失败` : ""}
+              {b.est_cost_usd != null ? ` · $${b.est_cost_usd.toFixed(4)}` : ""}
             </span>
           ))}
         </div>
