@@ -74,9 +74,12 @@ function tryParse(s) {
   }
 }
 
-// Scan from `start` (a '{') to its matching '}', honoring string literals and
-// escapes so braces inside strings don't throw off the depth count.
+// Scan from `start` (a '{' or '[') to its matching close, honoring string
+// literals and escapes so brackets inside strings don't throw off the depth
+// count. Handles nested mixes of {} and [] via a single depth counter.
 function sliceBalanced(text, start) {
+  const open = text[start];
+  if (open !== "{" && open !== "[") return null;
   let depth = 0;
   let inString = false;
   let escaped = false;
@@ -89,8 +92,8 @@ function sliceBalanced(text, start) {
       continue;
     }
     if (ch === '"') inString = true;
-    else if (ch === "{") depth += 1;
-    else if (ch === "}") {
+    else if (ch === "{" || ch === "[") depth += 1;
+    else if (ch === "}" || ch === "]") {
       depth -= 1;
       if (depth === 0) return text.slice(start, i + 1);
     }
@@ -98,14 +101,20 @@ function sliceBalanced(text, start) {
   return null;
 }
 
-// Pull the first parseable top-level JSON object out of free-form CLI text.
-// Order: (1) a ```json fenced block, (2) a bare {...} object anywhere in the
-// text (brace-matched), (3) the whole string as JSON. Returns the parsed object
-// or null when nothing parses.
+// Pull the first parseable top-level JSON value out of free-form CLI text.
+// Some schemas are arrays (PaperCard[], IdeaCard[]), so we must return arrays
+// as-is, not just their first element. Order: (1) the whole string as JSON —
+// the clean case where the CLI emitted pure JSON (object or array); (2) a
+// ```json fenced block; (3) the first balanced { ... } or [ ... ] anywhere in
+// the text. Returns the parsed object/array or null when nothing parses.
 export function extractJsonObject(text) {
   if (!text || typeof text !== "string") return null;
 
-  // (1) fenced code blocks — many CLIs wrap JSON in ```json ... ```
+  // (1) the whole string — pure JSON object or array, no prose or fence
+  const whole = tryParse(text);
+  if (whole && typeof whole === "object") return whole;
+
+  // (2) fenced code blocks — many CLIs wrap JSON in ```json ... ```
   const fence = /```(?:json)?\s*([\s\S]*?)```/gi;
   let m;
   while ((m = fence.exec(text)) !== null) {
@@ -113,9 +122,9 @@ export function extractJsonObject(text) {
     if (parsed && typeof parsed === "object") return parsed;
   }
 
-  // (2) first balanced { ... } anywhere in the text
+  // (3) first balanced { ... } or [ ... ] anywhere in the text
   for (let i = 0; i < text.length; i += 1) {
-    if (text[i] !== "{") continue;
+    if (text[i] !== "{" && text[i] !== "[") continue;
     const candidate = sliceBalanced(text, i);
     if (candidate) {
       const parsed = tryParse(candidate);
@@ -123,7 +132,5 @@ export function extractJsonObject(text) {
     }
   }
 
-  // (3) the whole string
-  const whole = tryParse(text);
-  return whole && typeof whole === "object" ? whole : null;
+  return null;
 }
