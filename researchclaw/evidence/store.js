@@ -27,6 +27,9 @@ export class FileEvidenceStore {
       join(base, "artifacts", "baseline_reproduction_checklist"),
       join(base, "artifacts", "idea_generation"),
       join(base, "artifacts", "idea_review"),
+      join(base, "artifacts", "experiment_planning"),
+      join(base, "artifacts", "experiment_execution"),
+      join(base, "artifacts", "experiment_review"),
       join(base, "artifacts", "summary"),
       join(base, "artifacts", "tool_results"),
       join(base, "logs")
