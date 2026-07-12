@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { approveContract } from "../contract/contract.js";
 import { MockModelAdapter } from "../adapters/mock.js";
 import { createArtifact } from "../evidence/types.js";
@@ -8,12 +9,18 @@ import { runIdeaWorkflow } from "../workflows/idea.js";
 import { runLiteratureWorkflow } from "../workflows/literature.js";
 import { runReviewWorkflow } from "../workflows/review.js";
 import { runSummaryWorkflow } from "../workflows/summary.js";
+import { runExperimentPlanningWorkflow } from "../workflows/experimentPlanning.js";
+import { runExperimentExecutionWorkflow } from "../workflows/experimentExecution.js";
+import { runExperimentReviewWorkflow } from "../workflows/experimentReview.js";
 import { touchState, recordPhase, recordSignal } from "./state.js";
 import {
   baselineGate,
   claimEvidenceGate,
   contractGate,
   evidenceGate,
+  experimentPlanGate,
+  experimentReviewGate,
+  experimentRunGate,
   ideaGate,
   literatureGate,
   reproductionChecklistGate,
@@ -27,7 +34,10 @@ const artifactTypeByStateKey = {
   baseline_artifact_ref: "baseline_decision",
   checklist_artifact_ref: "reproduction_checklist",
   idea_artifact_ref: "idea_cards",
-  review_artifact_ref: "idea_review_report"
+  review_artifact_ref: "idea_review_report",
+  experiment_plan_artifact_ref: "experiment_plan",
+  experiment_run_artifact_ref: "experiment_run",
+  experiment_review_artifact_ref: "experiment_review"
 };
 
 const phaseRunLabels = {
@@ -36,6 +46,9 @@ const phaseRunLabels = {
   baseline_reproduction_checklist: "Run reproduction checklist",
   idea_generation: "Run idea generation",
   idea_review: "Run idea review",
+  experiment_planning: "Plan experiment",
+  experiment_execution: "确认并执行实验命令",
+  experiment_review: "Review experiment result",
   summary: "Write summary"
 };
 
@@ -48,7 +61,10 @@ const retreatTargets = {
   baseline_reproduction_checklist: "baseline_selection",
   idea_generation: "idea_generation",
   idea_review: "idea_generation",
-  summary: "idea_review"
+  experiment_planning: "idea_review",
+  experiment_execution: "experiment_planning",
+  experiment_review: "experiment_execution",
+  summary: "experiment_review"
 };
 
 function setRunPhaseAction(state, phase) {
@@ -526,6 +542,15 @@ export class ResearchOrchestrator {
       case "idea_review":
         await this.runReviewStep(state);
         break;
+      case "experiment_planning":
+        await this.runExperimentPlanningStep(state);
+        break;
+      case "experiment_execution":
+        await this.runExperimentExecutionStep(state);
+        break;
+      case "experiment_review":
+        await this.runExperimentReviewStep(state);
+        break;
       case "summary":
         await this.runSummaryStep(state);
         break;
@@ -660,6 +685,124 @@ export class ResearchOrchestrator {
       return;
     }
     recordPhase(state, "idea_review", [reviewRef], "pass");
+    state.phase = "experiment_planning";
+    setRunPhaseAction(state, "experiment_planning");
+  }
+
+  async runExperimentPlanningStep(state) {
+    const { contract, ref: contractRef } = this.getContract(state);
+    const literature = this.readCurrentArtifact(state, "literature_artifact_ref");
+    const baseline = this.readCurrentArtifact(state, "baseline_artifact_ref");
+    const checklist = this.readCurrentArtifact(state, "checklist_artifact_ref");
+    const ideas = this.readCurrentArtifact(state, "idea_artifact_ref");
+    const review = this.readCurrentArtifact(state, "review_artifact_ref");
+    const inputRefs = [
+      contractRef,
+      state.current.literature_artifact_ref,
+      state.current.baseline_artifact_ref,
+      state.current.checklist_artifact_ref,
+      state.current.idea_artifact_ref,
+      state.current.review_artifact_ref
+    ];
+    const planArtifact = await runExperimentPlanningWorkflow({
+      adapter: this.adapter,
+      projectId: state.project_id,
+      contract,
+      literature: literature.content,
+      baseline: baseline.content,
+      checklist: checklist.content,
+      ideas: ideas.content,
+      review: review.content,
+      inputRefs,
+      evidenceRefs: inputRefs
+    });
+    const planRef = this.store.appendArtifact(planArtifact);
+    state.current.experiment_plan_artifact_ref = planRef;
+    const check = experimentPlanGate(planArtifact.content, {
+      contract,
+      recommendedIdeaId: review.content?.recommended_idea_id
+    });
+    if (!check.ok) {
+      this.blockWithoutWrite(state, "experiment_planning", [planRef], check.errors);
+      return;
+    }
+    recordPhase(state, "experiment_planning", [planRef], "pass");
+    state.phase = "experiment_execution";
+    // The execution pending action carries the command list so the panel can
+    // show exactly what will run before the human confirms (M5b). advance() is
+    // the confirm point — the panel POSTs advance to actually run the commands.
+    state.pending_human_actions = [
+      {
+        type: "run_phase",
+        phase: "experiment_execution",
+        label: phaseRunLabels.experiment_execution,
+        commands: Array.isArray(planArtifact.content?.commands) ? planArtifact.content.commands : []
+      }
+    ];
+  }
+
+  async runExperimentExecutionStep(state) {
+    const plan = this.readCurrentArtifact(state, "experiment_plan_artifact_ref");
+    const planRef = state.current.experiment_plan_artifact_ref;
+    const workdir = join(this.store.rootDir, "experiments", state.project_id);
+    const runArtifact = await runExperimentExecutionWorkflow({
+      store: this.store,
+      projectId: state.project_id,
+      plan: plan.content,
+      planRef,
+      workdir,
+      eventBus: this.eventBus,
+      inputRefs: [planRef],
+      evidenceRefs: [planRef]
+    });
+    const runRef = this.store.appendArtifact(runArtifact);
+    state.current.experiment_run_artifact_ref = runRef;
+    const check = experimentRunGate(runArtifact.content);
+    if (!check.ok) {
+      this.blockWithoutWrite(state, "experiment_execution", [runRef], check.errors);
+      return;
+    }
+    // Honest failure proceeds: a failed/blocked-but-structurally-valid run passes
+    // the gate and advances to review, where its meaning gets judged.
+    recordPhase(state, "experiment_execution", [runRef], "pass");
+    state.phase = "experiment_review";
+    setRunPhaseAction(state, "experiment_review");
+  }
+
+  async runExperimentReviewStep(state) {
+    const { contract, ref: contractRef } = this.getContract(state);
+    const plan = this.readCurrentArtifact(state, "experiment_plan_artifact_ref");
+    const run = this.readCurrentArtifact(state, "experiment_run_artifact_ref");
+    const ideas = this.readCurrentArtifact(state, "idea_artifact_ref");
+    const review = this.readCurrentArtifact(state, "review_artifact_ref");
+    const runRef = state.current.experiment_run_artifact_ref;
+    const inputRefs = [
+      contractRef,
+      state.current.experiment_plan_artifact_ref,
+      runRef,
+      state.current.idea_artifact_ref,
+      state.current.review_artifact_ref
+    ];
+    const reviewArtifact = await runExperimentReviewWorkflow({
+      adapter: this.adapter,
+      projectId: state.project_id,
+      plan: plan.content,
+      run: run.content,
+      runRef,
+      contract,
+      ideas: ideas.content,
+      review: review.content,
+      inputRefs,
+      evidenceRefs: inputRefs
+    });
+    const reviewRef = this.store.appendArtifact(reviewArtifact);
+    state.current.experiment_review_artifact_ref = reviewRef;
+    const check = experimentReviewGate(reviewArtifact.content);
+    if (!check.ok) {
+      this.blockWithoutWrite(state, "experiment_review", [reviewRef], check.errors);
+      return;
+    }
+    recordPhase(state, "experiment_review", [reviewRef], "pass");
     state.phase = "summary";
     setRunPhaseAction(state, "summary");
   }
@@ -688,7 +831,10 @@ export class ResearchOrchestrator {
       state.current.baseline_artifact_ref,
       state.current.checklist_artifact_ref,
       state.current.idea_artifact_ref,
-      state.current.review_artifact_ref
+      state.current.review_artifact_ref,
+      state.current.experiment_plan_artifact_ref,
+      state.current.experiment_run_artifact_ref,
+      state.current.experiment_review_artifact_ref
     ];
     const summaryArtifact = await runSummaryWorkflow({
       adapter: this.adapter,

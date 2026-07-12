@@ -229,7 +229,8 @@ export function evidenceGate(state) {
     ["baseline_artifact_ref", "baseline"],
     ["checklist_artifact_ref", "reproduction checklist"],
     ["idea_artifact_ref", "idea cards"],
-    ["review_artifact_ref", "idea review"]
+    ["review_artifact_ref", "idea review"],
+    ["experiment_review_artifact_ref", "experiment review"]
   ]) {
     if (!state.current?.[key]) {
       errors.push(`${label} artifact is missing`);
