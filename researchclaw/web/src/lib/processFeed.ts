@@ -1,6 +1,6 @@
 import type { CliRawLogSummary } from "../api/types";
 
-export type AdapterTone = "claude" | "gemini" | "codex" | "mock" | "manual" | "unknown";
+export type AdapterTone = "claude" | "gemini" | "codex" | "mock" | "manual" | "runner" | "unknown";
 
 // Source badge metadata. Serves the two-channel honesty: a glance tells you
 // whether a product came from a real CLI run or a mock replay (M2前端 §3.4).
