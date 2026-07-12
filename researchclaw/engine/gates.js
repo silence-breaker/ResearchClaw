@@ -243,3 +243,112 @@ export function evidenceGate(state) {
   }
   return { ok: errors.length === 0, errors };
 }
+
+// --- M5: experiment gates ---
+
+// The experiment plan must target the recommended idea, carry at least one
+// executable command, align its metrics with the contract, and state decidable
+// success/failure criteria.
+export function experimentPlanGate(plan, { contract, recommendedIdeaId } = {}) {
+  const errors = [];
+  if (!plan || typeof plan !== "object") {
+    return { ok: false, errors: ["experiment plan must be an object"] };
+  }
+  if (!plan.idea_ref) {
+    errors.push("plan.idea_ref is required");
+  } else if (recommendedIdeaId && plan.idea_ref !== recommendedIdeaId) {
+    errors.push(`plan.idea_ref must reference the recommended idea ${recommendedIdeaId}`);
+  }
+  const commands = Array.isArray(plan.commands) ? plan.commands : [];
+  if (commands.length === 0 || !commands.some(looksExecutable)) {
+    errors.push("plan.commands must include at least one executable command");
+  }
+  for (const field of ["success_criteria", "failure_criteria"]) {
+    if (!Array.isArray(plan?.[field]) || plan[field].length === 0) {
+      errors.push(`plan.${field} must be non-empty`);
+    }
+  }
+  const metrics = contract?.metrics;
+  const planMetrics = Array.isArray(plan?.metrics) ? plan.metrics : [];
+  if (Array.isArray(metrics) && metrics.length > 0) {
+    const names = planMetrics
+      .map((m) => (typeof m === "string" ? m : m?.name || ""))
+      .join(" ")
+      .toLowerCase();
+    const covered = metrics.some(
+      (metric) => typeof metric?.name === "string" && names.includes(metric.name.toLowerCase())
+    );
+    if (!covered) {
+      errors.push("plan.metrics must reference at least one contract metric");
+    }
+  }
+  return { ok: errors.length === 0, errors };
+}
+
+// The experiment run must record every attempted command with an exit_code and
+// raw_log refs. A "passed" run additionally requires every exit 0 AND non-empty
+// metrics_observed. A structurally valid "failed"/"blocked" run passes the gate
+// so honest failure proceeds to review (it does NOT block the pipeline).
+export function experimentRunGate(run) {
+  const errors = [];
+  if (!run || typeof run !== "object") {
+    return { ok: false, errors: ["experiment run must be an object"] };
+  }
+  const executed = Array.isArray(run.commands_executed) ? run.commands_executed : [];
+  if (executed.length === 0) {
+    errors.push("commands_executed must be non-empty");
+  }
+  for (const [index, cmd] of executed.entries()) {
+    if (!("exit_code" in cmd)) {
+      errors.push(`commands_executed[${index}] missing exit_code`);
+    }
+    if (!cmd.stdout_ref || !cmd.stderr_ref) {
+      errors.push(`commands_executed[${index}] missing stdout_ref/stderr_ref`);
+    }
+  }
+  if (!["passed", "failed", "blocked"].includes(run.status)) {
+    errors.push("status must be passed, failed, or blocked");
+  }
+  if (run.status === "passed") {
+    if (!executed.every((cmd) => cmd.exit_code === 0)) {
+      errors.push("passed run requires every command to exit 0");
+    }
+    const metrics = run.metrics_observed;
+    if (!metrics || typeof metrics !== "object" || Object.keys(metrics).length === 0) {
+      errors.push("passed run must report non-empty metrics_observed");
+    }
+  }
+  return { ok: errors.length === 0, errors };
+}
+
+// The experiment review must reference the run, and each claim_support entry must
+// name a claim + metric with a valid support_type. decision must be in the enum.
+export function experimentReviewGate(review) {
+  const errors = [];
+  const supportTypes = new Set(["supports", "does_not_support", "inconclusive"]);
+  const decisions = new Set(["accept_idea", "revise_idea", "reject_idea", "rerun_experiment"]);
+  if (!review || typeof review !== "object") {
+    return { ok: false, errors: ["experiment review must be an object"] };
+  }
+  if (!review.run_ref) {
+    errors.push("review.run_ref is required");
+  }
+  const support = Array.isArray(review.claim_support) ? review.claim_support : [];
+  if (support.length === 0) {
+    errors.push("claim_support must be non-empty");
+  }
+  for (const [index, entry] of support.entries()) {
+    if (!entry.claim_id) errors.push(`claim_support[${index}].claim_id is required`);
+    if (!entry.metric_ref) errors.push(`claim_support[${index}].metric_ref is required`);
+    if (!supportTypes.has(entry.support_type)) {
+      errors.push(`claim_support[${index}].support_type must be supports|does_not_support|inconclusive`);
+    }
+  }
+  if (!decisions.has(review.decision)) {
+    errors.push("decision must be accept_idea|revise_idea|reject_idea|rerun_experiment");
+  }
+  if (!Array.isArray(review.next_actions) || review.next_actions.length === 0) {
+    errors.push("next_actions must be non-empty");
+  }
+  return { ok: errors.length === 0, errors };
+}
