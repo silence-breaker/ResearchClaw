@@ -1,0 +1,14 @@
+{
+  "run_ref": "experiment_run_pending",
+  "claim_support": [
+    {
+      "claim_id": "C1",
+      "metric_ref": "recall@10",
+      "support_type": "supports",
+      "rationale": "Observed recall@10 exceeds the baseline threshold.",
+      "evidence_excerpt": "accuracy=0.9 in metrics.json"
+    }
+  ],
+  "decision": "accept_idea",
+  "next_actions": ["Write up the result and prepare the summary."]
+}
