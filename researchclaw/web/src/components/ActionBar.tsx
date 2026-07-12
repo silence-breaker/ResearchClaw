@@ -90,14 +90,25 @@ export function ActionBar({ state }: { state: ProjectState }) {
           }
           if (a.kind === "advance") {
             return (
-              <button
-                key={i}
-                disabled={busy}
-                onClick={() => mutation.mutate(() => advancePhase(projectId))}
-                className="rounded bg-accent px-3 py-1.5 text-sm font-medium text-panel-bg hover:opacity-90 disabled:opacity-50"
-              >
-                {a.label}
-              </button>
+              <div key={i} className="flex w-full flex-col gap-2">
+                {a.commands && a.commands.length > 0 ? (
+                  <div className="rounded border border-amber-400/30 bg-black/30 p-2 font-mono text-xs text-amber-200">
+                    {a.commands.map((cmd, ci) => (
+                      <div key={ci} className="whitespace-pre-wrap break-all">
+                        <span className="select-none text-amber-500/70">$ </span>
+                        {cmd}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                <button
+                  disabled={busy}
+                  onClick={() => mutation.mutate(() => advancePhase(projectId))}
+                  className="rounded bg-accent px-3 py-1.5 text-sm font-medium text-panel-bg hover:opacity-90 disabled:opacity-50"
+                >
+                  {a.label}
+                </button>
+              </div>
             );
           }
           // recover

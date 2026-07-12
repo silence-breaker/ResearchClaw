@@ -1,6 +1,28 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, it, test } from "vitest";
 import { deriveActions } from "./actions";
 import type { PendingAction } from "../api/types";
+
+function advanceOf(pending: PendingAction[]) {
+  return deriveActions(pending).find((a) => a.kind === "advance");
+}
+
+describe("deriveActions — run_phase commands passthrough", () => {
+  it("carries commands onto the advance action", () => {
+    const pending: PendingAction[] = [
+      { type: "run_phase", phase: "experiment_execution", label: "确认并执行实验命令", commands: ["node -e \"1\"", "ls"] }
+    ];
+    const advance = advanceOf(pending);
+    expect(advance?.commands).toEqual(["node -e \"1\"", "ls"]);
+  });
+
+  it("leaves commands undefined when the run_phase has none", () => {
+    const pending: PendingAction[] = [
+      { type: "run_phase", phase: "idea_review", label: "Run idea review" }
+    ];
+    const advance = advanceOf(pending);
+    expect(advance?.commands).toBeUndefined();
+  });
+});
 
 describe("deriveActions", () => {
   test("approve_or_revise yields an approve and a revise action carrying artifact ids", () => {
