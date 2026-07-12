@@ -6,7 +6,9 @@ const fixtures = {
   baseline: new URL("../../fixtures/workflows/baseline-output.json", import.meta.url),
   checklist: new URL("../../fixtures/workflows/reproduction-checklist-output.json", import.meta.url),
   idea: new URL("../../fixtures/workflows/idea-output.json", import.meta.url),
-  review: new URL("../../fixtures/workflows/idea-review-output.json", import.meta.url)
+  review: new URL("../../fixtures/workflows/idea-review-output.json", import.meta.url),
+  experimentPlan: new URL("../../fixtures/workflows/experiment-plan-output.json", import.meta.url),
+  experimentReview: new URL("../../fixtures/workflows/experiment-review-output.json", import.meta.url)
 };
 
 export class MockModelAdapter {
@@ -67,6 +69,10 @@ export class MockModelAdapter {
         return deepClone(readJsonUrl(fixtures.idea));
       case "idea_review":
         return deepClone(readJsonUrl(fixtures.review));
+      case "experiment_planning":
+        return deepClone(readJsonUrl(fixtures.experimentPlan));
+      case "experiment_review":
+        return deepClone(readJsonUrl(fixtures.experimentReview));
       case "summary":
         return this.summaryFor(request);
       default:

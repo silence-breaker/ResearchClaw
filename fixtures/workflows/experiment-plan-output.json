@@ -1,0 +1,13 @@
+{
+  "hypothesis": "A task-aware reranker with structured negatives improves recall@10 without materially increasing latency.",
+  "idea_ref": "idea_structured_negatives",
+  "baseline_ref": "baseline_selected",
+  "dataset_requirements": ["held-out test split from the selected baseline"],
+  "environment_requirements": ["node >= 20"],
+  "commands": ["node -e \"require('fs').writeFileSync('metrics.json', JSON.stringify({ accuracy: 0.9 }))\""],
+  "expected_outputs": ["metrics.json containing the recall@10 result"],
+  "metrics": ["recall@10"],
+  "success_criteria": ["recall@10 improves over baseline by >= 1.0 absolute point"],
+  "failure_criteria": ["recall@10 gain < 0.3 absolute point"],
+  "risks": ["negative construction may leak validation assumptions"]
+}

@@ -295,6 +295,12 @@ test("approve and advance run the mock pipeline one phase at a time", async () =
   await orchestrator.advance("proj_demo_001");
   assert.equal(store.readState("proj_demo_001").phase, "idea_review");
   await orchestrator.advance("proj_demo_001");
+  assert.equal(store.readState("proj_demo_001").phase, "experiment_planning");
+  await orchestrator.advance("proj_demo_001");
+  assert.equal(store.readState("proj_demo_001").phase, "experiment_execution");
+  await orchestrator.advance("proj_demo_001");
+  assert.equal(store.readState("proj_demo_001").phase, "experiment_review");
+  await orchestrator.advance("proj_demo_001");
   assert.equal(store.readState("proj_demo_001").phase, "summary");
   await orchestrator.advance("proj_demo_001");
   const finalState = store.readState("proj_demo_001");
@@ -315,7 +321,7 @@ test("summary evidence_index is computed from the contract claim map", async () 
     artifact_id: stateBefore.current.contract_artifact_id,
     approved_by: "human"
   });
-  for (let i = 0; i < 6; i += 1) {
+  for (let i = 0; i < 9; i += 1) {
     await orchestrator.advance("proj_demo_001"); // literature..summary
   }
   const finalState = store.readState("proj_demo_001");

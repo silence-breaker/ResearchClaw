@@ -36,3 +36,17 @@ test("unknown schema name throws", () => {
   assert.throws(() => validateOutput("NopeV9", {}), /unknown output schema/i);
   assert.throws(() => getOutputSchema("NopeV9"), /unknown output schema/i);
 });
+
+test("ExperimentPlanV1 and ExperimentReviewV1 are registered and validate shape", () => {
+  assert.doesNotThrow(() => getOutputSchema("ExperimentPlanV1"));
+  assert.doesNotThrow(() => getOutputSchema("ExperimentReviewV1"));
+  assert.equal(validateOutput("ExperimentPlanV1", {
+    idea_ref: "i", commands: ["python x.py"], metrics: ["recall@10"],
+    success_criteria: ["s"], failure_criteria: ["f"]
+  }).ok, true);
+  assert.equal(validateOutput("ExperimentPlanV1", { idea_ref: "i" }).ok, false);
+  assert.equal(validateOutput("ExperimentReviewV1", {
+    run_ref: "r", claim_support: [{ claim_id: "C1", metric_ref: "m", support_type: "supports" }], decision: "accept_idea"
+  }).ok, true);
+  assert.equal(validateOutput("ExperimentReviewV1", { run_ref: "r" }).ok, false);
+});

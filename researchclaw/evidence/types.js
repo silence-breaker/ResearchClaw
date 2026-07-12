@@ -7,6 +7,9 @@ const artifactTypes = new Set([
   "reproduction_checklist",
   "idea_cards",
   "idea_review_report",
+  "experiment_plan",
+  "experiment_run",
+  "experiment_review",
   "summary",
   "raw_log",
   // M3: a human-promoted consult turn. Lives in the evidence store for

@@ -8,6 +8,9 @@ export const researchPhases = [
   "baseline_reproduction_checklist",
   "idea_generation",
   "idea_review",
+  "experiment_planning",
+  "experiment_execution",
+  "experiment_review",
   "summary",
   "blocked"
 ];
