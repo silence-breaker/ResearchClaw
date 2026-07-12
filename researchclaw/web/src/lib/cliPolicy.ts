@@ -1,19 +1,27 @@
 import type { CliId, CliProvider, ProviderStatus } from "../api/types";
 
-export const CLI_BY_PROVIDER: Record<Exclude<CliProvider, "mock">, CliId> = {
+export const CLI_BY_PROVIDER: Record<Exclude<CliProvider, "mock" | "runner">, CliId> = {
   claude: "claude-code",
   gemini: "gemini-cli",
   codex: "codex-cli"
 };
 
+// "mock" and "runner" are not user-selectable CLI providers — runner is RC's
+// internal command executor (experiment_execution), not an LLM CLI. Narrow them
+// out before indexing CLI_BY_PROVIDER.
+function isCliProvider(provider: CliProvider): provider is Exclude<CliProvider, "mock" | "runner"> {
+  return provider !== "mock" && provider !== "runner";
+}
+
 export function isValidCliForProvider(provider: CliProvider, cli: CliId): boolean {
   if (provider === "mock") return cli === "mock";
+  if (!isCliProvider(provider)) return false;
   if (cli === "mock") return false;
   return CLI_BY_PROVIDER[provider] === cli;
 }
 
 export function defaultCliForProvider(provider: CliProvider): CliId {
-  if (provider === "mock") return "mock";
+  if (!isCliProvider(provider)) return "mock";
   return CLI_BY_PROVIDER[provider];
 }
 
