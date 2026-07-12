@@ -12,6 +12,9 @@ export type ResearchPhase =
   | "baseline_reproduction_checklist"
   | "idea_generation"
   | "idea_review"
+  | "experiment_planning"
+  | "experiment_execution"
+  | "experiment_review"
   | "summary"
   | "blocked";
 
@@ -42,7 +45,7 @@ export type PendingAction =
       artifact_ref: string;
       label: string;
     }
-  | { type: "run_phase"; phase: ResearchPhase; label: string }
+  | { type: "run_phase"; phase: ResearchPhase; label: string; commands?: string[] }
   | { type: "phase_running"; phase: ResearchPhase; label: string }
   | {
       type: "revise_required";
@@ -64,6 +67,9 @@ export interface ProjectCurrent {
   checklist_artifact_ref?: string;
   idea_artifact_ref?: string;
   review_artifact_ref?: string;
+  experiment_plan_artifact_ref?: string;
+  experiment_run_artifact_ref?: string;
+  experiment_review_artifact_ref?: string;
   summary_artifact_ref?: string;
   raw_log_artifact_refs?: string[];
   consult_note_refs?: string[];
@@ -186,7 +192,7 @@ export interface HealthStatus {
 }
 
 // V3-M1: sanitized provider status from API.md claude/codex/gemini section.
-export type CliProvider = "claude" | "gemini" | "codex" | "mock";
+export type CliProvider = "claude" | "gemini" | "codex" | "mock" | "runner";
 export type CliId = "claude-code" | "gemini-cli" | "codex-cli" | "mock";
 
 export interface ProviderStatus {
@@ -226,7 +232,10 @@ export type ArtifactType =
   | "idea_review_report"
   | "summary"
   | "raw_log"
-  | "consult_note";
+  | "consult_note"
+  | "experiment_plan"
+  | "experiment_run"
+  | "experiment_review";
 
 export interface Artifact<T = unknown> {
   artifact_id: string;
@@ -234,7 +243,7 @@ export interface Artifact<T = unknown> {
   phase: ResearchPhase;
   type: ArtifactType;
   created_at: string;
-  producer: { workflow: string; adapter: "mock" | "claude" | "gemini" | "codex" | "manual"; cli?: string; model?: string; windowId?: string };
+  producer: { workflow: string; adapter: "mock" | "claude" | "gemini" | "codex" | "manual" | "runner"; cli?: string; model?: string; windowId?: string };
   input_refs: string[];
   evidence_refs: string[];
   content: T;

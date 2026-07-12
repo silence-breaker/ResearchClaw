@@ -8,6 +8,9 @@ const PHASE_LABEL: Partial<Record<ResearchPhase, string>> = {
   baseline_reproduction_checklist: "复现清单",
   idea_generation: "想法生成",
   idea_review: "想法评审",
+  experiment_planning: "实验规划",
+  experiment_execution: "实验执行",
+  experiment_review: "实验复核",
   summary: "总结"
 };
 
@@ -20,7 +23,7 @@ function phaseLabel(phase: ResearchPhase): string {
 export type PanelAction =
   | { kind: "approve"; label: string; artifactId?: string; artifactRef?: string }
   | { kind: "revise"; label: string; artifactId?: string; artifactRef?: string }
-  | { kind: "advance"; label: string; phase: ResearchPhase }
+  | { kind: "advance"; label: string; phase: ResearchPhase; commands?: string[] }
   | { kind: "recover"; label: string; to?: ResearchPhase; errors: string[] }
   | { kind: "provide_direction"; label: string }
   | { kind: "running"; label: string }
@@ -41,7 +44,13 @@ export function deriveActions(pending: PendingAction[]): PanelAction[] {
       }
       case "run_phase": {
         const phase = (p as { phase: ResearchPhase }).phase;
-        actions.push({ kind: "advance", label: `推进：${phaseLabel(phase)}`, phase });
+        const commands = (p as { commands?: string[] }).commands;
+        actions.push({
+          kind: "advance",
+          label: `推进：${phaseLabel(phase)}`,
+          phase,
+          commands: Array.isArray(commands) ? commands : undefined
+        });
         break;
       }
       case "revise_required": {

@@ -1,13 +1,82 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchArtifact } from "../api/client";
+import type { ArtifactType } from "../api/types";
+import { shapeExperimentArtifact } from "../lib/experimentArtifact";
 import { useArtifactDrawer } from "../stores/drawer";
 import { AdapterBadge } from "./AdapterBadge";
+import { RefChip } from "./RefChip";
 
 function Meta({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex gap-2 text-xs">
       <span className="w-24 shrink-0 text-panel-muted">{label}</span>
       <span className="break-all text-panel-text">{value}</span>
+    </div>
+  );
+}
+
+const EXPERIMENT_TYPES = new Set<ArtifactType>([
+  "experiment_plan",
+  "experiment_run",
+  "experiment_review"
+]);
+
+function isExperimentType(type: ArtifactType): boolean {
+  return EXPERIMENT_TYPES.has(type);
+}
+
+function ExperimentArtifactBody({
+  type,
+  content
+}: {
+  type: ArtifactType;
+  content: unknown;
+}) {
+  const shaped = shapeExperimentArtifact(type, content);
+  return (
+    <div className="space-y-3">
+      {/* Field rows */}
+      {shaped.fields.length > 0 && (
+        <div className="space-y-1 rounded-lg border border-panel-border bg-panel-bg p-3">
+          {shaped.fields.map((f) => (
+            <Meta key={f.label} label={f.label} value={f.value} />
+          ))}
+        </div>
+      )}
+
+      {/* run_ref for experiment_review */}
+      {shaped.runRef && (
+        <div className="space-y-1 rounded-lg border border-panel-border bg-panel-bg p-3">
+          <Meta label="run_ref" value={<RefChip refValue={shaped.runRef} />} />
+        </div>
+      )}
+
+      {/* Commands block */}
+      {shaped.commands && shaped.commands.length > 0 && (
+        <div className="rounded border border-amber-400/30 bg-black/30 p-2 font-mono text-xs text-amber-200">
+          {shaped.commands.map((cmd, i) => (
+            <div key={i} className="whitespace-pre-wrap break-all">
+              <span className="select-none text-amber-500/70">$ </span>
+              {cmd}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* claim_support list */}
+      {shaped.claimSupport && shaped.claimSupport.length > 0 && (
+        <div className="space-y-1 rounded-lg border border-panel-border bg-panel-bg p-3">
+          <div className="mb-1 text-xs uppercase tracking-wide text-panel-muted">claim_support</div>
+          {shaped.claimSupport.map((entry, i) => (
+            <div key={i} className="flex gap-2 text-xs">
+              <span className="w-24 shrink-0 text-panel-muted">{entry.claim_id ?? "—"}</span>
+              <span className="break-all text-panel-text">
+                {entry.metric_ref ?? "—"} · {entry.support_type ?? "—"}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -78,9 +147,13 @@ export function ArtifactDetailDrawer({ projectId }: { projectId: string }) {
 
               <section>
                 <div className="mb-1 text-xs uppercase tracking-wide text-panel-muted">content</div>
-                <pre className="overflow-x-auto rounded-lg bg-panel-bg p-3 font-mono text-xs leading-relaxed text-panel-text">
-                  {JSON.stringify(artifact.content, null, 2)}
-                </pre>
+                {isExperimentType(artifact.type) ? (
+                  <ExperimentArtifactBody type={artifact.type} content={artifact.content} />
+                ) : (
+                  <pre className="overflow-x-auto rounded-lg bg-panel-bg p-3 font-mono text-xs leading-relaxed text-panel-text">
+                    {JSON.stringify(artifact.content, null, 2)}
+                  </pre>
+                )}
               </section>
             </>
           )}

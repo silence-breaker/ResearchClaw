@@ -9,8 +9,8 @@ export interface PipelineNode {
   done: ResearchPhase;
 }
 
-// The seven in-scope demo phases shown as pipeline nodes. 深度调研 / 实验执行 are
-// reserved in the enum but out of v2 scope, so they are NOT nodes here.
+// The in-scope pipeline phases shown as nodes, including the three experiment
+// phases (M5b). 深度调研 remains reserved in the enum but is out of scope here.
 export const PIPELINE: PipelineNode[] = [
   { id: "contract", label: "研究契约", phases: ["intake", "contract_draft", "contract_review"], done: "contract_review" },
   { id: "literature_scouting", label: "文献侦察", phases: ["literature_scouting"], done: "literature_scouting" },
@@ -23,6 +23,9 @@ export const PIPELINE: PipelineNode[] = [
   },
   { id: "idea_generation", label: "想法生成", phases: ["idea_generation"], done: "idea_generation" },
   { id: "idea_review", label: "想法评审", phases: ["idea_review"], done: "idea_review" },
+  { id: "experiment_planning", label: "实验规划", phases: ["experiment_planning"], done: "experiment_planning" },
+  { id: "experiment_execution", label: "实验执行", phases: ["experiment_execution"], done: "experiment_execution" },
+  { id: "experiment_review", label: "实验复核", phases: ["experiment_review"], done: "experiment_review" },
   { id: "summary", label: "总结", phases: ["summary"], done: "summary" }
 ];
 
@@ -68,6 +71,9 @@ const STRUCTURED_REF_KEYS = [
   "checklist_artifact_ref",
   "idea_artifact_ref",
   "review_artifact_ref",
+  "experiment_plan_artifact_ref",
+  "experiment_run_artifact_ref",
+  "experiment_review_artifact_ref",
   "summary_artifact_ref"
 ] as const;
 

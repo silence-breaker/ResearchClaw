@@ -13,6 +13,9 @@ const PHASE_LABELS: Record<ResearchPhase, string> = {
   baseline_reproduction_checklist: "基线复现清单",
   idea_generation: "Idea 生成",
   idea_review: "Idea 评审",
+  experiment_planning: "实验规划",
+  experiment_execution: "实验执行",
+  experiment_review: "实验复核",
   summary: "总结",
   blocked: "阻塞"
 };

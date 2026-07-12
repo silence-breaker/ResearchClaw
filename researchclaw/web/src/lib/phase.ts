@@ -10,6 +10,9 @@ export const PHASE_LABEL: Partial<Record<ResearchPhase, string>> = {
   baseline_reproduction_checklist: "复现清单",
   idea_generation: "想法生成",
   idea_review: "想法评审",
+  experiment_planning: "实验规划",
+  experiment_execution: "实验执行",
+  experiment_review: "实验复核",
   summary: "总结",
   blocked: "需修订"
 };
@@ -23,6 +26,9 @@ export const PHASE_TASKS: Partial<Record<ResearchPhase, string[]>> = {
   baseline_reproduction_checklist: ["拆解复现步骤", "形成 reproduction checklist"],
   idea_generation: ["生成研究想法", "产出 idea cards"],
   idea_review: ["评审想法", "形成 review report"],
+  experiment_planning: ["产出可执行实验计划", "对齐指标与判据"],
+  experiment_execution: ["确认并执行实验命令", "记录运行结果与产物"],
+  experiment_review: ["判断实验是否支持各 claim", "给出实验决策"],
   summary: ["汇总研究路线", "产出 summary artifact"],
   blocked: ["查看失败原因", "选择回退阶段", "重新运行阶段"]
 };
@@ -36,6 +42,9 @@ type ArtifactKey = keyof Pick<
   | "checklist_artifact_ref"
   | "idea_artifact_ref"
   | "review_artifact_ref"
+  | "experiment_plan_artifact_ref"
+  | "experiment_run_artifact_ref"
+  | "experiment_review_artifact_ref"
   | "summary_artifact_ref"
 >;
 
@@ -48,6 +57,9 @@ const PHASE_ARTIFACT_KEY: Partial<Record<ResearchPhase, ArtifactKey>> = {
   baseline_reproduction_checklist: "checklist_artifact_ref",
   idea_generation: "idea_artifact_ref",
   idea_review: "review_artifact_ref",
+  experiment_planning: "experiment_plan_artifact_ref",
+  experiment_execution: "experiment_run_artifact_ref",
+  experiment_review: "experiment_review_artifact_ref",
   summary: "summary_artifact_ref",
   idle: "summary_artifact_ref"
 };
