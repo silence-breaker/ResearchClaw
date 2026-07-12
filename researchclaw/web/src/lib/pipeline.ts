@@ -23,6 +23,9 @@ export const PIPELINE: PipelineNode[] = [
   },
   { id: "idea_generation", label: "想法生成", phases: ["idea_generation"], done: "idea_generation" },
   { id: "idea_review", label: "想法评审", phases: ["idea_review"], done: "idea_review" },
+  { id: "experiment_planning", label: "实验规划", phases: ["experiment_planning"], done: "experiment_planning" },
+  { id: "experiment_execution", label: "实验执行", phases: ["experiment_execution"], done: "experiment_execution" },
+  { id: "experiment_review", label: "实验复核", phases: ["experiment_review"], done: "experiment_review" },
   { id: "summary", label: "总结", phases: ["summary"], done: "summary" }
 ];
 
@@ -68,6 +71,9 @@ const STRUCTURED_REF_KEYS = [
   "checklist_artifact_ref",
   "idea_artifact_ref",
   "review_artifact_ref",
+  "experiment_plan_artifact_ref",
+  "experiment_run_artifact_ref",
+  "experiment_review_artifact_ref",
   "summary_artifact_ref"
 ] as const;
 

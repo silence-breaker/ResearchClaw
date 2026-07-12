@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, it, test } from "vitest";
 import type { ProjectState } from "../api/types";
 import { PIPELINE, nodeStatus, overallProgress, gatePassRate, artifactCount } from "./pipeline";
 
@@ -23,7 +23,7 @@ function pass(phase: ProjectState["phase"]) {
 }
 
 describe("PIPELINE", () => {
-  test("covers the seven in-scope demo phases", () => {
+  test("covers the ten in-scope demo phases", () => {
     expect(PIPELINE.map((n) => n.id)).toEqual([
       "contract",
       "literature_scouting",
@@ -31,6 +31,9 @@ describe("PIPELINE", () => {
       "baseline_reproduction_checklist",
       "idea_generation",
       "idea_review",
+      "experiment_planning",
+      "experiment_execution",
+      "experiment_review",
       "summary"
     ]);
   });
@@ -72,12 +75,12 @@ describe("overallProgress", () => {
   });
 
   test("counts done pipeline nodes over total", () => {
-    // contract + literature done out of 7 -> 29%
+    // contract + literature done out of 10 -> 20%
     const state = baseState({ phase_history: [pass("contract_review"), pass("literature_scouting")] });
-    expect(overallProgress(state)).toBe(29);
+    expect(overallProgress(state)).toBe(20);
   });
 
-  test("is 100 when all seven nodes are done", () => {
+  test("is 100 when all ten nodes are done", () => {
     const state = baseState({
       phase_history: [
         pass("contract_review"),
@@ -86,6 +89,9 @@ describe("overallProgress", () => {
         pass("baseline_reproduction_checklist"),
         pass("idea_generation"),
         pass("idea_review"),
+        pass("experiment_planning"),
+        pass("experiment_execution"),
+        pass("experiment_review"),
         pass("summary")
       ]
     });
@@ -123,6 +129,31 @@ describe("artifactCount", () => {
       }
     });
     // 3 structured refs; raw logs are not "结论" artifacts and are excluded
+    expect(artifactCount(state)).toBe(3);
+  });
+});
+
+describe("PIPELINE — experiment nodes", () => {
+  it("includes the three experiment phases in order between idea_review and summary", () => {
+    const idxOf = (id: string) => PIPELINE.findIndex((n) => n.id === id);
+    const seq = PIPELINE.slice(idxOf("idea_review") + 1, idxOf("summary")).map((n) => n.id);
+    expect(seq).toEqual([
+      "experiment_planning",
+      "experiment_execution",
+      "experiment_review"
+    ]);
+  });
+});
+
+describe("artifactCount — experiment refs", () => {
+  it("counts experiment artifact refs", () => {
+    const state = {
+      current: {
+        experiment_plan_artifact_ref: "a",
+        experiment_run_artifact_ref: "b",
+        experiment_review_artifact_ref: "c"
+      }
+    } as ProjectState;
     expect(artifactCount(state)).toBe(3);
   });
 });
