@@ -9,8 +9,8 @@ export interface PipelineNode {
   done: ResearchPhase;
 }
 
-// The seven in-scope demo phases shown as pipeline nodes. 深度调研 / 实验执行 are
-// reserved in the enum but out of v2 scope, so they are NOT nodes here.
+// The in-scope pipeline phases shown as nodes, including the three experiment
+// phases (M5b). 深度调研 remains reserved in the enum but is out of scope here.
 export const PIPELINE: PipelineNode[] = [
   { id: "contract", label: "研究契约", phases: ["intake", "contract_draft", "contract_review"], done: "contract_review" },
   { id: "literature_scouting", label: "文献侦察", phases: ["literature_scouting"], done: "literature_scouting" },
