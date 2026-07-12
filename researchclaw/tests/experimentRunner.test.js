@@ -27,6 +27,13 @@ test("screenCommand allows a relative-path node command", () => {
   assert.equal(screenCommand("python src/train.py --epochs 1").ok, true);
 });
 
+test("screenCommand blocks disk format but allows --output-format", () => {
+  assert.equal(screenCommand("format C:").ok, false);
+  assert.equal(screenCommand("format d: /q").ok, false);
+  assert.equal(screenCommand("python src/train.py --output-format csv").ok, true);
+  assert.equal(screenCommand("python format_results.py").ok, true);
+});
+
 test("runCommands runs a node command, writes a file, and reports passed", async () => {
   const workdir = tempWorkdir();
   const runner = new CommandRunner({ workdir });

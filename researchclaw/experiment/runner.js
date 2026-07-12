@@ -12,7 +12,7 @@ const DENYLIST = [
   { pattern: /\bdd\b\s+if=/i, label: "dd if=" },
   { pattern: /\bmkfs\b/i, label: "mkfs" },
   { pattern: /\b(shutdown|reboot|halt)\b/i, label: "shutdown/reboot" },
-  { pattern: /\bformat\b/i, label: "format" },
+  { pattern: /\bformat\s+[a-z]:/i, label: "format drive" },
   { pattern: /\bdel\s+\/[a-z]/i, label: "del /flag" },
   { pattern: /\brmdir\s+\/s/i, label: "rmdir /s" },
   { pattern: />\s*\/dev\//i, label: "redirect to /dev" }
