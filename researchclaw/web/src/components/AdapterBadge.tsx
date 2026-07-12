@@ -9,6 +9,7 @@ const TONE_CLASS: Record<AdapterTone, string> = {
   codex: "border-violet-400/40 bg-violet-400/15 text-violet-300",
   mock: "border-panel-border bg-panel-bg text-panel-muted",
   manual: "border-panel-border bg-panel-bg text-panel-muted/70",
+  runner: "border-amber-400/40 bg-amber-400/15 text-amber-300",
   unknown: "border-panel-border bg-panel-bg text-panel-muted/70"
 };
 

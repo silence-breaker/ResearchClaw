@@ -16,6 +16,8 @@ export function adapterBadgeMeta(adapter: string | undefined): { label: string; 
       return { label: "Mock", tone: "mock" };
     case "manual":
       return { label: "人工", tone: "manual" };
+    case "runner":
+      return { label: "执行器", tone: "runner" };
     default:
       return { label: adapter || "—", tone: "unknown" };
   }

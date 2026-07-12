@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, it, test } from "vitest";
 import { adapterBadgeMeta, cliLabel, readRawLogSummary } from "./processFeed";
 
 describe("adapterBadgeMeta", () => {
@@ -21,6 +21,14 @@ describe("adapterBadgeMeta", () => {
     expect(adapterBadgeMeta("claude").tone).toBe("claude");
     expect(adapterBadgeMeta("mock").tone).toBe("mock");
     expect(adapterBadgeMeta("manual").tone).toBe("manual");
+  });
+});
+
+describe("adapterBadgeMeta — runner", () => {
+  it("returns runner tone with a non-empty label", () => {
+    const meta = adapterBadgeMeta("runner");
+    expect(meta.tone).toBe("runner");
+    expect(meta.label).toBe("执行器");
   });
 });
 
